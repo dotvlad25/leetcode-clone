@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   Play, Send, Brain, ChevronLeft, CheckCircle2, XCircle,
   Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
-  Code2, FlaskConical, ChevronDown,
+  Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import {
@@ -320,6 +320,7 @@ export default function ProblemDetail() {
   const [activeBottomTab, setActiveBottomTab] = useState("output");
   const [terminalOutput, setTerminalOutput] = useState<string>("");
   const [bottomOpen, setBottomOpen] = useState(false);
+  const [leftTab, setLeftTab] = useState<"instructions" | "solution">("instructions");
   const bottomPanelRef = useRef<ImperativePanelHandle>(null);
 
   // Lock page scroll while on this page
@@ -439,9 +440,93 @@ export default function ProblemDetail() {
 
           {/* Left: Problem description */}
           <ResizablePanel defaultSize={42} minSize={25} maxSize={65}>
-            <div className="h-full overflow-y-auto overflow-x-hidden p-5">
-              <div className="prose prose-sm prose-invert max-w-none">
-                <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{problem.description}</Streamdown>
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Top strip: Back + Instructions / Solution tabs */}
+              <div className="shrink-0 flex items-center gap-1 border-b border-[#2d2d2d] bg-[#1a1a1a] px-2 h-10">
+                <Link href="/problems">
+                  <button className="flex items-center gap-1 px-2 py-1.5 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors">
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Problems</span>
+                  </button>
+                </Link>
+                <div className="w-px h-4 bg-[#3a3a3a] mx-1" />
+                <button
+                  onClick={() => setLeftTab("instructions")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                    leftTab === "instructions"
+                      ? "bg-[#2d2d2d] text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-[#252525]"
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Instructions
+                </button>
+                <button
+                  onClick={() => setLeftTab("solution")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                    leftTab === "solution"
+                      ? "bg-[#2d2d2d] text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-[#252525]"
+                  }`}
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  Solution
+                  {!problem.solution && (
+                    <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">soon</span>
+                  )}
+                </button>
+              </div>
+              {/* Content area */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-5">
+                {leftTab === "instructions" ? (
+                  <div className="prose prose-sm prose-invert max-w-none">
+                    <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{problem.description}</Streamdown>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {problem.solution ? (
+                      <>
+                        {/* Solution explanation */}
+                        {problem.solutionExplanation && (
+                          <div className="prose prose-sm prose-invert max-w-none">
+                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{problem.solutionExplanation}</Streamdown>
+                          </div>
+                        )}
+                        {/* Solution code */}
+                        <div className="rounded-lg overflow-hidden border border-[#3a3a3a]">
+                          <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3a3a3a]">
+                            <Code2 className="w-3.5 h-3.5 text-primary" />
+                            <span className="text-xs font-medium text-muted-foreground">solution.py</span>
+                          </div>
+                          <Editor
+                            height="400px"
+                            defaultLanguage="python"
+                            language="python"
+                            value={problem.solution}
+                            theme="vs-dark"
+                            options={{
+                              fontSize: 13,
+                              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                              minimap: { enabled: false },
+                              scrollBeyondLastLine: false,
+                              lineNumbers: "on",
+                              readOnly: true,
+                              domReadOnly: true,
+                              wordWrap: "on",
+                              padding: { top: 10, bottom: 10 },
+                              scrollbar: { vertical: "hidden", alwaysConsumeMouseWheel: false },
+                            }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-4">
+                        <Lightbulb className="w-12 h-12 opacity-20" />
+                        <p className="text-sm">Solution coming soon</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </ResizablePanel>

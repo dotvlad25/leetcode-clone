@@ -24,7 +24,9 @@ export const problems = mysqlTable("problems", {
   difficulty: mysqlEnum("difficulty", ["Easy", "Medium", "Hard"]).notNull(),
   description: text("description").notNull(),
   starterCode: text("starterCode").notNull(),
-  methodName: varchar("methodName", { length: 128 }).notNull().default("solve"),
+  solution: text("solution"),
+  solutionExplanation: text("solutionExplanation"),
+  methodName: varchar("methodName", { length: 64 }).default("findDuplicate").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

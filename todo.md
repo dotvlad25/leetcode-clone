@@ -37,3 +37,20 @@
 - [x] Vitest unit tests for execution engine
 - [x] Vitest unit tests for AI analysis router (mocked invokeLLM, structured JSON parsing)
 - [x] Vitest unit tests for problems.list and problems.getBySlug
+
+## UI Improvements
+- [x] Collapsible bottom panel with Output/Test Results/AI Analysis/History tabs
+- [x] Always-visible tab strip with chevron toggle
+- [x] Dark code blocks in problem descriptions
+- [x] Top strip above left panel: Back button + Instructions/Solution tab switcher
+
+## Solutions
+- [x] Add solution and explanation columns to problems table in DB
+- [x] Write expert-reviewed solutions with explanations for LC609
+- [x] Write expert-reviewed solutions with explanations for LC636
+- [x] Write expert-reviewed solutions with explanations for LC1242
+- [x] Write expert-reviewed solutions with explanations for LC146
+- [x] Write expert-reviewed solutions with explanations for LC588
+- [x] Write expert-reviewed solutions with explanations for LC1236
+- [x] Write expert-reviewed solutions with explanations for LC1752
+- [x] Seed all 7 solutions into the database
