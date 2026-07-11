@@ -358,13 +358,13 @@ export default function ProblemDetail() {
 
   const handleRun = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
-    runMutation.mutate({ slug, code: currentCode, methodName });
+    runMutation.mutate({ slug, code: currentCode });
   };
 
   const handleSubmit = () => {
     if (!isAuthenticated) { startLogin(); return; }
     if (!currentCode.trim()) return toast.error("Write some code first!");
-    submitMutation.mutate({ slug, code: currentCode, methodName });
+    submitMutation.mutate({ slug, code: currentCode });
   };
 
   const handleAnalyze = () => {

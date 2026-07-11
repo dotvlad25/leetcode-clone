@@ -19,10 +19,11 @@ export const users = mysqlTable("users", {
 export const problems = mysqlTable("problems", {
   id: int("id").autoincrement().primaryKey(),
   slug: varchar("slug", { length: 128 }).notNull().unique(),
-  title: varchar("title", { length: 256 }).notNull(),
+  title: text("title").notNull(),
   difficulty: mysqlEnum("difficulty", ["Easy", "Medium", "Hard"]).notNull(),
   description: text("description").notNull(),
   starterCode: text("starterCode").notNull(),
+  methodName: varchar("methodName", { length: 128 }).notNull().default("solve"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

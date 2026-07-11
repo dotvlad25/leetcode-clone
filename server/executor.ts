@@ -98,6 +98,13 @@ export function buildGenericTestScript(
   inputData: string,
   expectedOutput: string
 ): string {
+  // LC1242: Web Crawler Multithreaded needs a simulated HtmlParser
+  const isWebCrawler = methodName === "crawl";
+  if (isWebCrawler) {
+    return buildWebCrawlerTestScript(userCode, inputData, expectedOutput);
+  }
+  // LC636: exclusiveTime — result is a list of ints, order matters
+  const isExclusiveTime = methodName === "exclusiveTime";
   return `
 import json, sys, traceback
 
@@ -113,11 +120,58 @@ try:
         result = getattr(sol, ${JSON.stringify(methodName)})(input_data)
     def normalize(v):
         if isinstance(v, list):
-            return sorted([sorted(x) if isinstance(x, list) else x for x in v])
+            ${isExclusiveTime ? "return v  # preserve order for exclusive time" : "return sorted([sorted(x) if isinstance(x, list) else x for x in v])"}
         return v
     actual_norm = normalize(result)
     expected_norm = normalize(expected)
     if actual_norm == expected_norm:
+        print(json.dumps({"passed": True, "actual": result}))
+    else:
+        print(json.dumps({"passed": False, "actual": result, "expected": expected}))
+except Exception as e:
+    print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
+`.trim();
+}
+
+/**
+ * Builds a test script for LC1242 Web Crawler Multithreaded.
+ * Simulates the HtmlParser interface using a graph defined in inputData.
+ * inputData format: { urls: string[], edges: [from_idx, to_idx][], startUrl: string }
+ */
+export function buildWebCrawlerTestScript(
+  userCode: string,
+  inputData: string,
+  expectedOutput: string
+): string {
+  return `
+import json, sys, traceback
+from typing import List
+from collections import deque
+import threading
+
+class HtmlParser:
+    def __init__(self, graph):
+        self._graph = graph  # dict: url -> [linked_urls]
+    def getUrls(self, url: str) -> List[str]:
+        return self._graph.get(url, [])
+
+${userCode}
+
+try:
+    raw = json.loads(${JSON.stringify(inputData)})
+    urls = raw["urls"]
+    edges = raw["edges"]
+    start_url = raw["startUrl"]
+    # Build adjacency: edges[i] = [from_idx, to_idx]
+    graph = {u: [] for u in urls}
+    for from_idx, to_idx in edges:
+        graph[urls[from_idx]].append(urls[to_idx])
+    parser = HtmlParser(graph)
+    sol = Solution()
+    result = sol.crawl(start_url, parser)
+    expected = json.loads(${JSON.stringify(expectedOutput)})
+    # Order-independent comparison
+    if sorted(result) == sorted(expected):
         print(json.dumps({"passed": True, "actual": result}))
     else:
         print(json.dumps({"passed": False, "actual": result, "expected": expected}))

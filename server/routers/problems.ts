@@ -8,7 +8,7 @@ import {
   getSubmissionsForUser,
   getAcceptedProblemIds,
 } from "../db";
-import { executePython, buildGenericTestScript, TestCaseResult } from "../executor";
+import { executePython, buildGenericTestScript, buildWebCrawlerTestScript, TestCaseResult } from "../executor";
 import { invokeLLM } from "../_core/llm";
 
 export const problemsRouter = router({
@@ -40,18 +40,18 @@ export const problemsRouter = router({
     .input(z.object({
       slug: z.string(),
       code: z.string().max(50000),
-      methodName: z.string().default("findDuplicate"),
     }))
     .mutation(async ({ input }) => {
       const problem = await getProblemBySlug(input.slug);
       if (!problem) throw new Error("Problem not found");
       const cases = await getTestCasesForProblem(problem.id);
+      const methodName = (problem as any).methodName || "solve";
 
       const results: TestCaseResult[] = [];
       for (const tc of cases) {
         const script = buildGenericTestScript(
           input.code,
-          input.methodName,
+          methodName,
           tc.inputData,
           tc.expectedOutput
         );
@@ -89,18 +89,18 @@ export const problemsRouter = router({
     .input(z.object({
       slug: z.string(),
       code: z.string().max(50000),
-      methodName: z.string().default("findDuplicate"),
     }))
     .mutation(async ({ input, ctx }) => {
       const problem = await getProblemBySlug(input.slug);
       if (!problem) throw new Error("Problem not found");
       const cases = await getTestCasesForProblem(problem.id);
+      const methodName = (problem as any).methodName || "solve";
 
       const results: TestCaseResult[] = [];
       for (const tc of cases) {
         const script = buildGenericTestScript(
           input.code,
-          input.methodName,
+          methodName,
           tc.inputData,
           tc.expectedOutput
         );
@@ -248,4 +248,3 @@ Provide a thorough code review.`;
       }));
     }),
 });
-
