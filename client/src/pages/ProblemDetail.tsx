@@ -120,7 +120,7 @@ function TestResultPanel({ results, status }: { results: TestResult[]; status: s
   const allPassed = passed === total;
 
   return (
-    <div className="p-4 space-y-3 overflow-y-auto h-full">
+    <div className="p-4 space-y-3">
       <div className={`flex items-center gap-3 p-3 rounded-lg ${allPassed ? "test-pass" : "test-fail"}`}>
         {allPassed ? (
           <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
@@ -189,7 +189,7 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
   }
   const scoreColor = analysis.correctness.score >= 8 ? "text-primary" : analysis.correctness.score >= 5 ? "text-medium" : "text-destructive";
   return (
-    <div className="p-4 space-y-4 overflow-y-auto h-full">
+    <div className="p-4 space-y-4">
       <div className="p-3 rounded-lg bg-secondary/50 border border-border">
         <p className="text-sm text-foreground leading-relaxed">{analysis.overall}</p>
       </div>
@@ -287,7 +287,7 @@ function SubmissionHistoryPanel({ slug }: { slug: string }) {
     );
   }
   return (
-    <div className="p-4 space-y-3 overflow-y-auto h-full">
+    <div className="p-4 space-y-3">
       {history.map((sub) => {
         const passed = sub.testResults.filter((r: TestResult) => r.passed).length;
         const total = sub.testResults.length;
@@ -333,6 +333,18 @@ export default function ProblemDetail() {
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState("tests");
   const [terminalOutput, setTerminalOutput] = useState<string>("");
+
+  // Lock page scroll while on the problem detail view; restore on unmount
+  useEffect(() => {
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, []);
 
   const handleEditorMount = useCallback(
     (_editor: unknown, _monaco: unknown) => {
@@ -399,7 +411,7 @@ export default function ProblemDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
         <NavBar />
         <div className="container py-8 space-y-4">
           <Skeleton className="h-8 w-64" />
@@ -415,7 +427,7 @@ export default function ProblemDetail() {
 
   if (!problem) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
         <NavBar />
         <div className="container py-16 text-center">
           <h2 className="text-xl font-semibold">Problem not found</h2>
@@ -428,11 +440,11 @@ export default function ProblemDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <NavBar />
 
       {/* Top bar */}
-      <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between gap-4 shrink-0">
+      <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between gap-4 shrink-0 z-10">
         <div className="flex items-center gap-3">
           <Link href="/problems">
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-1 px-2">
@@ -478,12 +490,12 @@ export default function ProblemDetail() {
       </div>
 
       {/* Main split layout */}
-      <div className="flex-1 overflow-hidden" style={{ height: "calc(100vh - 7rem)" }}>
-        <ResizablePanelGroup direction="horizontal" className="h-full">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ResizablePanelGroup direction="horizontal" className="h-full w-full">
 
           {/* Left: Problem description */}
           <ResizablePanel defaultSize={42} minSize={25} maxSize={65}>
-            <div className="h-full overflow-y-auto p-5">
+            <div className="h-full overflow-y-auto overflow-x-hidden p-5">
               <div className="prose prose-sm prose-invert max-w-none">
                 <Streamdown>{problem.description}</Streamdown>
               </div>
@@ -494,11 +506,11 @@ export default function ProblemDetail() {
 
           {/* Right: Editor + Terminal + Results */}
           <ResizablePanel defaultSize={58} minSize={35}>
-            <ResizablePanelGroup direction="vertical" className="h-full">
+            <ResizablePanelGroup direction="vertical" className="h-full w-full">
 
               {/* Editor panel with Solution / Unit Tests tab switcher */}
-              <ResizablePanel defaultSize={50} minSize={25}>
-                <div className="h-full flex flex-col bg-[#1e1e1e]">
+              <ResizablePanel defaultSize={55} minSize={20}>
+                <div className="h-full flex flex-col bg-[#1e1e1e] overflow-hidden">
                   {/* Editor tab bar */}
                   <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1">
                     <button
@@ -586,15 +598,15 @@ export default function ProblemDetail() {
               <ResizableHandle withHandle className="bg-[#2d2d2d] hover:bg-primary/50 transition-colors" />
 
               {/* Terminal output panel */}
-              <ResizablePanel defaultSize={20} minSize={10} maxSize={45}>
+              <ResizablePanel defaultSize={20} minSize={8} maxSize={50}>
                 <TerminalPanel output={terminalOutput} isRunning={isRunning} />
               </ResizablePanel>
 
               <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors" />
 
               {/* Bottom tabs: Test Results / AI Analysis / History */}
-              <ResizablePanel defaultSize={30} minSize={15}>
-                <div className="h-full border-t border-border bg-card flex flex-col">
+              <ResizablePanel defaultSize={25} minSize={12}>
+                <div className="h-full border-t border-border bg-card flex flex-col overflow-hidden">
                   <Tabs value={activeBottomTab} onValueChange={setActiveBottomTab} className="h-full flex flex-col">
                     <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-10 px-2 gap-1 shrink-0">
                       <TabsTrigger
@@ -623,13 +635,19 @@ export default function ProblemDetail() {
                     </TabsList>
                     <div className="flex-1 overflow-hidden">
                       <TabsContent value="tests" className="h-full m-0 overflow-hidden">
-                        <TestResultPanel results={testResults} status={submitStatus} />
+                        <div className="h-full overflow-y-auto overflow-x-hidden">
+                          <TestResultPanel results={testResults} status={submitStatus} />
+                        </div>
                       </TabsContent>
                       <TabsContent value="ai" className="h-full m-0 overflow-hidden">
-                        <AIAnalysisPanel analysis={aiAnalysis} isLoading={isAnalyzing} />
+                        <div className="h-full overflow-y-auto overflow-x-hidden">
+                          <AIAnalysisPanel analysis={aiAnalysis} isLoading={isAnalyzing} />
+                        </div>
                       </TabsContent>
                       <TabsContent value="history" className="h-full m-0 overflow-hidden">
-                        <SubmissionHistoryPanel slug={slug} />
+                        <div className="h-full overflow-y-auto overflow-x-hidden">
+                          <SubmissionHistoryPanel slug={slug} />
+                        </div>
                       </TabsContent>
                     </div>
                   </Tabs>
@@ -643,4 +661,3 @@ export default function ProblemDetail() {
     </div>
   );
 }
-
