@@ -22,6 +22,9 @@
 - [x] Run Tests panel (per-test-case pass/fail results)
 - [x] AI Analysis panel (structured feedback)
 - [x] Submission history panel
+- [ ] Editor panel: tab switcher between "Solution" (editable) and "Unit Tests" (read-only) views
+- [x] Editor panel: tab switcher between "Solution" (editable) and "Unit Tests" (read-only) views
+- [x] Terminal output panel below the editor showing raw stdout/stderr from Python execution
 - [x] Routing (/, /problems, /problems/:slug)
 
 ## Data Seeding

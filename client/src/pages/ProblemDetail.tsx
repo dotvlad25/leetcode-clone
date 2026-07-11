@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useParams, Link } from "wouter";
 import Editor from "@monaco-editor/react";
 import { trpc } from "@/lib/trpc";
@@ -7,12 +7,12 @@ import { startLogin } from "@/const";
 import NavBar from "@/components/NavBar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   Play, Send, Brain, ChevronLeft, CheckCircle2, XCircle,
-  Clock, AlertTriangle, Loader2, History, BarChart3,
+  Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
+  Code2, FlaskConical,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import {
@@ -51,6 +51,60 @@ type AIAnalysis = {
   optimizedApproach: string;
 };
 
+// ── Terminal Panel ─────────────────────────────────────────────────────────────
+function TerminalPanel({ output, isRunning }: { output: string; isRunning: boolean }) {
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [output]);
+
+  return (
+    <div className="h-full flex flex-col bg-[#0d0d0d] font-mono text-xs">
+      {/* Terminal header */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#2a2a2a] bg-[#1a1a1a] shrink-0">
+        <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="text-muted-foreground text-xs">Output</span>
+        {isRunning && (
+          <span className="ml-auto flex items-center gap-1 text-primary text-xs">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Running...
+          </span>
+        )}
+      </div>
+      {/* Terminal body */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
+        {!output && !isRunning ? (
+          <p className="text-[#555] select-none">$ Run or Submit to see output here...</p>
+        ) : (
+          output.split("\n").map((line, i) => {
+            const isPass = line.startsWith("✅");
+            const isFail = line.startsWith("❌");
+            const isExpected = line.trim().startsWith("Expected:");
+            const isGot = line.trim().startsWith("Got:");
+            const isError = line.trim().startsWith("Error:");
+            const color = isPass
+              ? "text-[oklch(0.72_0.18_145)]"
+              : isFail
+              ? "text-[oklch(0.65_0.22_25)]"
+              : isExpected
+              ? "text-[oklch(0.72_0.18_145)]"
+              : isGot || isError
+              ? "text-[oklch(0.65_0.22_25)]"
+              : "text-[#ccc]";
+            return (
+              <div key={i} className={`leading-5 whitespace-pre-wrap break-all ${color}`}>
+                {line || "\u00a0"}
+              </div>
+            );
+          })
+        )}
+        <div ref={endRef} />
+      </div>
+    </div>
+  );
+}
+
+// ── Test Result Panel ──────────────────────────────────────────────────────────
 function TestResultPanel({ results, status }: { results: TestResult[]; status: string | null }) {
   if (!results.length) {
     return (
@@ -67,7 +121,6 @@ function TestResultPanel({ results, status }: { results: TestResult[]; status: s
 
   return (
     <div className="p-4 space-y-3 overflow-y-auto h-full">
-      {/* Summary */}
       <div className={`flex items-center gap-3 p-3 rounded-lg ${allPassed ? "test-pass" : "test-fail"}`}>
         {allPassed ? (
           <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
@@ -81,8 +134,6 @@ function TestResultPanel({ results, status }: { results: TestResult[]; status: s
           <p className="text-xs text-muted-foreground">{passed} passed · {total - passed} failed</p>
         </div>
       </div>
-
-      {/* Individual test cases */}
       {results.map((r, i) => (
         <div key={r.id} className={`rounded-lg p-3 space-y-2 ${r.passed ? "test-pass" : "test-fail"}`}>
           <div className="flex items-center gap-2">
@@ -118,6 +169,7 @@ function TestResultPanel({ results, status }: { results: TestResult[]; status: s
   );
 }
 
+// ── AI Analysis Panel ──────────────────────────────────────────────────────────
 function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null; isLoading: boolean }) {
   if (isLoading) {
     return (
@@ -127,7 +179,6 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
       </div>
     );
   }
-
   if (!analysis) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-16">
@@ -136,17 +187,12 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
       </div>
     );
   }
-
   const scoreColor = analysis.correctness.score >= 8 ? "text-primary" : analysis.correctness.score >= 5 ? "text-medium" : "text-destructive";
-
   return (
     <div className="p-4 space-y-4 overflow-y-auto h-full">
-      {/* Overall */}
       <div className="p-3 rounded-lg bg-secondary/50 border border-border">
         <p className="text-sm text-foreground leading-relaxed">{analysis.overall}</p>
       </div>
-
-      {/* Score + Complexity */}
       <div className="grid grid-cols-3 gap-3">
         <div className="p-3 rounded-lg bg-card border border-border text-center">
           <p className="text-xs text-muted-foreground mb-1">Correctness</p>
@@ -161,14 +207,10 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
           <p className="text-lg font-bold text-foreground font-mono">{analysis.spaceComplexity.notation}</p>
         </div>
       </div>
-
-      {/* Correctness feedback */}
       <div className="space-y-1">
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Correctness</h4>
         <p className="text-sm text-foreground">{analysis.correctness.feedback}</p>
       </div>
-
-      {/* Complexity explanations */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Time Complexity</h4>
@@ -179,38 +221,30 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
           <p className="text-sm text-foreground">{analysis.spaceComplexity.explanation}</p>
         </div>
       </div>
-
-      {/* Improvements */}
       {analysis.improvements.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Improvements</h4>
           <ul className="space-y-1">
             {analysis.improvements.map((imp, i) => (
               <li key={i} className="flex gap-2 text-sm text-foreground">
-                <span className="text-primary shrink-0">•</span>
-                {imp}
+                <span className="text-primary shrink-0">•</span>{imp}
               </li>
             ))}
           </ul>
         </div>
       )}
-
-      {/* Style issues */}
       {analysis.styleIssues.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Style Issues</h4>
           <ul className="space-y-1">
             {analysis.styleIssues.map((issue, i) => (
               <li key={i} className="flex gap-2 text-sm text-foreground">
-                <AlertTriangle className="w-3.5 h-3.5 text-medium shrink-0 mt-0.5" />
-                {issue}
+                <AlertTriangle className="w-3.5 h-3.5 text-medium shrink-0 mt-0.5" />{issue}
               </li>
             ))}
           </ul>
         </div>
       )}
-
-      {/* Optimal approach */}
       <div className="space-y-1">
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Optimal Approach</h4>
         <p className="text-sm text-foreground">{analysis.optimizedApproach}</p>
@@ -219,13 +253,13 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
   );
 }
 
+// ── Submission History Panel ───────────────────────────────────────────────────
 function SubmissionHistoryPanel({ slug }: { slug: string }) {
   const { isAuthenticated } = useAuth();
   const { data: history, isLoading } = trpc.problems.submissionHistory.useQuery(
     { slug },
     { enabled: isAuthenticated }
   );
-
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-16">
@@ -235,7 +269,6 @@ function SubmissionHistoryPanel({ slug }: { slug: string }) {
       </div>
     );
   }
-
   if (isLoading) {
     return (
       <div className="p-4 space-y-3">
@@ -245,7 +278,6 @@ function SubmissionHistoryPanel({ slug }: { slug: string }) {
       </div>
     );
   }
-
   if (!history?.length) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-16">
@@ -254,7 +286,6 @@ function SubmissionHistoryPanel({ slug }: { slug: string }) {
       </div>
     );
   }
-
   return (
     <div className="p-4 space-y-3 overflow-y-auto h-full">
       {history.map((sub) => {
@@ -289,45 +320,36 @@ function SubmissionHistoryPanel({ slug }: { slug: string }) {
   );
 }
 
+// ── Main Page ──────────────────────────────────────────────────────────────────
 export default function ProblemDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { isAuthenticated } = useAuth();
 
   const { data: problem, isLoading } = trpc.problems.getBySlug.useQuery({ slug });
   const [code, setCode] = useState<string>("");
+  const [editorTab, setEditorTab] = useState<"solution" | "tests">("solution");
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState("tests");
+  const [terminalOutput, setTerminalOutput] = useState<string>("");
 
-  // Set starter code once problem loads
   const handleEditorMount = useCallback(
     (_editor: unknown, _monaco: unknown) => {
-      if (problem && !code) {
-        setCode(problem.starterCode);
-      }
+      if (problem && !code) setCode(problem.starterCode);
     },
     [problem, code]
   );
 
-  // Derive method name from starter code
-  const methodName = (() => {
-    if (!problem) return "findDuplicate";
-    const match = problem.starterCode.match(/def\s+(\w+)\s*\(/);
-    return match ? match[1] : "findDuplicate";
-  })();
-
   const runMutation = trpc.problems.runTests.useMutation({
     onSuccess: (data) => {
       setTestResults(data.results);
+      setTerminalOutput(data.terminalOutput);
       setActiveBottomTab("tests");
       const passed = data.results.filter((r) => r.passed).length;
       const total = data.results.length;
-      if (passed === total) {
-        toast.success(`All ${total} tests passed!`);
-      } else {
-        toast.error(`${passed}/${total} tests passed`);
-      }
+      if (passed === total) toast.success(`All ${total} tests passed!`);
+      else toast.error(`${passed}/${total} tests passed`);
     },
     onError: (err) => toast.error(`Execution error: ${err.message}`),
   });
@@ -336,12 +358,10 @@ export default function ProblemDetail() {
     onSuccess: (data) => {
       setTestResults(data.results);
       setSubmitStatus(data.status);
+      setTerminalOutput(data.terminalOutput);
       setActiveBottomTab("tests");
-      if (data.status === "accepted") {
-        toast.success("Accepted! All tests passed.");
-      } else {
-        toast.error("Wrong Answer — check your test results.");
-      }
+      if (data.status === "accepted") toast.success("Accepted! All tests passed.");
+      else toast.error("Wrong Answer — check your test results.");
     },
     onError: (err) => toast.error(`Submit error: ${err.message}`),
   });
@@ -355,15 +375,19 @@ export default function ProblemDetail() {
   });
 
   const currentCode = code || problem?.starterCode || "";
+  const isRunning = runMutation.isPending || submitMutation.isPending;
+  const isAnalyzing = analyzeMutation.isPending;
 
   const handleRun = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
+    setTerminalOutput("");
     runMutation.mutate({ slug, code: currentCode });
   };
 
   const handleSubmit = () => {
     if (!isAuthenticated) { startLogin(); return; }
     if (!currentCode.trim()) return toast.error("Write some code first!");
+    setTerminalOutput("");
     submitMutation.mutate({ slug, code: currentCode });
   };
 
@@ -394,7 +418,7 @@ export default function ProblemDetail() {
       <div className="min-h-screen bg-background text-foreground">
         <NavBar />
         <div className="container py-16 text-center">
-          <h2 className="text-xl font-semibold text-foreground">Problem not found</h2>
+          <h2 className="text-xl font-semibold">Problem not found</h2>
           <Link href="/problems">
             <Button className="mt-4" variant="outline">Back to Problems</Button>
           </Link>
@@ -403,15 +427,12 @@ export default function ProblemDetail() {
     );
   }
 
-  const isRunning = runMutation.isPending || submitMutation.isPending;
-  const isAnalyzing = analyzeMutation.isPending;
-
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <NavBar />
 
       {/* Top bar */}
-      <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between gap-4">
+      <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <Link href="/problems">
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-1 px-2">
@@ -459,8 +480,9 @@ export default function ProblemDetail() {
       {/* Main split layout */}
       <div className="flex-1 overflow-hidden" style={{ height: "calc(100vh - 7rem)" }}>
         <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Left panel: Problem description */}
-          <ResizablePanel defaultSize={45} minSize={25} maxSize={70}>
+
+          {/* Left: Problem description */}
+          <ResizablePanel defaultSize={42} minSize={25} maxSize={65}>
             <div className="h-full overflow-y-auto p-5">
               <div className="prose prose-sm prose-invert max-w-none">
                 <Streamdown>{problem.description}</Streamdown>
@@ -470,44 +492,108 @@ export default function ProblemDetail() {
 
           <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors" />
 
-          {/* Right panel: Editor + Results */}
-          <ResizablePanel defaultSize={55} minSize={30}>
+          {/* Right: Editor + Terminal + Results */}
+          <ResizablePanel defaultSize={58} minSize={35}>
             <ResizablePanelGroup direction="vertical" className="h-full">
-              {/* Editor */}
-              <ResizablePanel defaultSize={60} minSize={30}>
-                <div className="h-full bg-[#1e1e1e]">
-                  <Editor
-                    height="100%"
-                    defaultLanguage="python"
-                    language="python"
-                    value={code || problem.starterCode}
-                    onChange={(val) => setCode(val ?? "")}
-                    onMount={handleEditorMount}
-                    theme="vs-dark"
-                    options={{
-                      fontSize: 14,
-                      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                      fontLigatures: true,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      lineNumbers: "on",
-                      renderLineHighlight: "line",
-                      tabSize: 4,
-                      insertSpaces: true,
-                      wordWrap: "on",
-                      padding: { top: 12, bottom: 12 },
-                      smoothScrolling: true,
-                      cursorBlinking: "smooth",
-                      bracketPairColorization: { enabled: true },
-                    }}
-                  />
+
+              {/* Editor panel with Solution / Unit Tests tab switcher */}
+              <ResizablePanel defaultSize={50} minSize={25}>
+                <div className="h-full flex flex-col bg-[#1e1e1e]">
+                  {/* Editor tab bar */}
+                  <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1">
+                    <button
+                      onClick={() => setEditorTab("solution")}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                        editorTab === "solution"
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Code2 className="w-3.5 h-3.5" />
+                      solution.py
+                    </button>
+                    <button
+                      onClick={() => setEditorTab("tests")}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                        editorTab === "tests"
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <FlaskConical className="w-3.5 h-3.5" />
+                      test_cases.py
+                      <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
+                    </button>
+                  </div>
+
+                  {/* Monaco editor */}
+                  <div className="flex-1 overflow-hidden">
+                    {editorTab === "solution" ? (
+                      <Editor
+                        height="100%"
+                        defaultLanguage="python"
+                        language="python"
+                        value={currentCode}
+                        onChange={(val) => setCode(val ?? "")}
+                        onMount={handleEditorMount}
+                        theme="vs-dark"
+                        options={{
+                          fontSize: 14,
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                          fontLigatures: true,
+                          minimap: { enabled: false },
+                          scrollBeyondLastLine: false,
+                          lineNumbers: "on",
+                          renderLineHighlight: "line",
+                          tabSize: 4,
+                          insertSpaces: true,
+                          wordWrap: "on",
+                          padding: { top: 12, bottom: 12 },
+                          smoothScrolling: true,
+                          cursorBlinking: "smooth",
+                          bracketPairColorization: { enabled: true },
+                        }}
+                      />
+                    ) : (
+                      <Editor
+                        height="100%"
+                        defaultLanguage="python"
+                        language="python"
+                        value={problem.unitTestCode ?? "# Unit tests not available"}
+                        theme="vs-dark"
+                        options={{
+                          fontSize: 13,
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                          fontLigatures: true,
+                          minimap: { enabled: false },
+                          scrollBeyondLastLine: false,
+                          lineNumbers: "on",
+                          readOnly: true,
+                          renderLineHighlight: "line",
+                          tabSize: 4,
+                          wordWrap: "on",
+                          padding: { top: 12, bottom: 12 },
+                          smoothScrolling: true,
+                          cursorStyle: "line-thin",
+                          domReadOnly: true,
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
+              </ResizablePanel>
+
+              <ResizableHandle withHandle className="bg-[#2d2d2d] hover:bg-primary/50 transition-colors" />
+
+              {/* Terminal output panel */}
+              <ResizablePanel defaultSize={20} minSize={10} maxSize={45}>
+                <TerminalPanel output={terminalOutput} isRunning={isRunning} />
               </ResizablePanel>
 
               <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors" />
 
               {/* Bottom tabs: Test Results / AI Analysis / History */}
-              <ResizablePanel defaultSize={40} minSize={20}>
+              <ResizablePanel defaultSize={30} minSize={15}>
                 <div className="h-full border-t border-border bg-card flex flex-col">
                   <Tabs value={activeBottomTab} onValueChange={setActiveBottomTab} className="h-full flex flex-col">
                     <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-10 px-2 gap-1 shrink-0">
@@ -549,6 +635,7 @@ export default function ProblemDetail() {
                   </Tabs>
                 </div>
               </ResizablePanel>
+
             </ResizablePanelGroup>
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -556,3 +643,4 @@ export default function ProblemDetail() {
     </div>
   );
 }
+

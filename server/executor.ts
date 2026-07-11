@@ -44,6 +44,110 @@ export interface TestCaseResult {
   expected: string;
   actual: string;
   error?: string;
+  stdout?: string;
+  stderr?: string;
+}
+
+/**
+ * Generates a human-readable Python unit test file for a given problem.
+ * This is shown read-only in the editor so users can see exactly what runs.
+ */
+export function buildUnitTestCode(
+  methodName: string,
+  testCases: Array<{ description: string; inputData: string; expectedOutput: string; orderIndex: number }>,
+  slug: string
+): string {
+  const isWebCrawler = methodName === "crawl";
+  const isExclusiveTime = methodName === "exclusiveTime";
+
+  const imports = isWebCrawler
+    ? `import unittest
+from typing import List
+from collections import deque
+import threading
+
+# Simulated HtmlParser for testing
+class HtmlParser:
+    def __init__(self, graph: dict):
+        self._graph = graph
+    def getUrls(self, url: str) -> List[str]:
+        return self._graph.get(url, [])
+`
+    : `import unittest
+from typing import List
+`;
+
+  const className = slug
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join("")
+    .replace(/\d+/g, "");
+
+  const testMethods = testCases
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((tc, i) => {
+      const inputParsed = JSON.parse(tc.inputData);
+      const expectedParsed = JSON.parse(tc.expectedOutput);
+
+      if (isWebCrawler) {
+        const { urls, edges, startUrl } = inputParsed as {
+          urls: string[];
+          edges: [number, number][];
+          startUrl: string;
+        };
+        const graphLines = urls.map((u: string) => `        "${u}": []`).join(",\n");
+        const edgeLines = edges
+          .map(([f, t]: [number, number]) => `        graph["${urls[f]}"].append("${urls[t]}")`)
+          .join("\n");
+        const expectedStr = JSON.stringify(expectedParsed);
+        return `    def test_case_${i + 1}(self):
+        """${tc.description}"""
+        graph = {
+${graphLines}
+        }
+${edgeLines}
+        parser = HtmlParser(graph)
+        result = self.solution.crawl("${startUrl}", parser)
+        self.assertEqual(sorted(result), sorted(${expectedStr}))
+`;
+      }
+
+      // Generic: spread list args
+      const argsStr = Array.isArray(inputParsed)
+        ? inputParsed.map((a: unknown) => JSON.stringify(a)).join(", ")
+        : JSON.stringify(inputParsed);
+      const expectedStr = JSON.stringify(expectedParsed);
+
+      if (isExclusiveTime) {
+        return `    def test_case_${i + 1}(self):
+        """${tc.description}"""
+        result = self.solution.${methodName}(${argsStr})
+        self.assertEqual(result, ${expectedStr})
+`;
+      }
+
+      // Default: order-independent list comparison
+      return `    def test_case_${i + 1}(self):
+        """${tc.description}"""
+        result = self.solution.${methodName}(${argsStr})
+        normalize = lambda v: sorted([sorted(x) if isinstance(x, list) else x for x in v]) if isinstance(v, list) else v
+        self.assertEqual(normalize(result), normalize(${expectedStr}))
+`;
+    })
+    .join("\n");
+
+  return `${imports}
+# ─── Your solution is imported below ──────────────────────────────────────────
+# (The test runner injects your Solution class before running these tests)
+
+class Test${className}(unittest.TestCase):
+    def setUp(self):
+        self.solution = Solution()
+
+${testMethods}
+if __name__ == "__main__":
+    unittest.main()
+`;
 }
 
 /**

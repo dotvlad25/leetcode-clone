@@ -8,7 +8,7 @@ import {
   getSubmissionsForUser,
   getAcceptedProblemIds,
 } from "../db";
-import { executePython, buildGenericTestScript, buildWebCrawlerTestScript, TestCaseResult } from "../executor";
+import { executePython, buildGenericTestScript, buildUnitTestCode, TestCaseResult } from "../executor";
 import { invokeLLM } from "../_core/llm";
 
 export const problemsRouter = router({
@@ -32,7 +32,18 @@ export const problemsRouter = router({
       const problem = await getProblemBySlug(input.slug);
       if (!problem) return null;
       const cases = await getTestCasesForProblem(problem.id);
-      return { ...problem, testCases: cases };
+      const methodName = (problem as any).methodName || "solve";
+      const unitTestCode = buildUnitTestCode(
+        methodName,
+        cases.map((c) => ({
+          description: c.description,
+          inputData: c.inputData,
+          expectedOutput: c.expectedOutput,
+          orderIndex: c.orderIndex,
+        })),
+        problem.slug
+      );
+      return { ...problem, testCases: cases, unitTestCode };
     }),
 
   // Run code against all test cases (does not save submission)
@@ -48,6 +59,8 @@ export const problemsRouter = router({
       const methodName = (problem as any).methodName || "solve";
 
       const results: TestCaseResult[] = [];
+      const terminalLines: string[] = [];
+
       for (const tc of cases) {
         const script = buildGenericTestScript(
           input.code,
@@ -56,32 +69,62 @@ export const problemsRouter = router({
           tc.expectedOutput
         );
         const exec = await executePython(script);
+        // Always emit raw stderr first (syntax errors, tracebacks)
+        if (exec.stderr && exec.stderr.trim()) {
+          terminalLines.push(`--- stderr (case ${tc.orderIndex + 1}) ---`);
+          terminalLines.push(exec.stderr.trim());
+        }
         if (exec.timedOut) {
-          results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)" });
+          results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)", stdout: "", stderr: "TLE" });
+          terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description} — Time Limit Exceeded`);
           continue;
         }
         try {
           const parsed = JSON.parse(exec.stdout || "{}");
-          results.push({
+          const r: TestCaseResult = {
             id: tc.id,
             description: tc.description,
             passed: parsed.passed === true,
             expected: tc.expectedOutput,
             actual: parsed.actual !== undefined ? JSON.stringify(parsed.actual) : exec.stdout,
             error: parsed.error,
-          });
+            stdout: exec.stdout,
+            stderr: exec.stderr,
+          };
+          results.push(r);
+          const icon = r.passed ? "✅" : "❌";
+          terminalLines.push(`${icon} Case ${tc.orderIndex + 1}: ${tc.description}`);
+          if (!r.passed) {
+            terminalLines.push(`   Expected: ${tc.expectedOutput}`);
+            terminalLines.push(`   Got:      ${r.actual}`);
+            if (r.error) terminalLines.push(`   Error:\n${r.error.split("\n").map(l => "   " + l).join("\n")}`);
+          }
         } catch {
-          results.push({
+          const r: TestCaseResult = {
             id: tc.id,
             description: tc.description,
             passed: false,
             expected: tc.expectedOutput,
             actual: exec.stdout,
             error: exec.stderr || "Failed to parse output",
-          });
+            stdout: exec.stdout,
+            stderr: exec.stderr,
+          };
+          results.push(r);
+          terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description}`);
+          // Show raw stdout if it contains useful info (e.g. print() calls)
+          if (exec.stdout && exec.stdout.trim()) {
+            terminalLines.push(`   stdout: ${exec.stdout.trim()}`);
+          }
+          terminalLines.push(`   ${exec.stderr?.trim() || "Failed to parse output"}`);
         }
       }
-      return { results };
+      const passed = results.filter((r) => r.passed).length;
+      const total = results.length;
+      const summary = passed === total
+        ? `\n✅ All ${total} test cases passed!`
+        : `\n❌ ${passed}/${total} test cases passed`;
+      return { results, terminalOutput: terminalLines.join("\n") + summary };
     }),
 
   // Submit code — runs tests and saves submission
@@ -97,6 +140,8 @@ export const problemsRouter = router({
       const methodName = (problem as any).methodName || "solve";
 
       const results: TestCaseResult[] = [];
+      const terminalLines: string[] = [];
+
       for (const tc of cases) {
         const script = buildGenericTestScript(
           input.code,
@@ -105,34 +150,62 @@ export const problemsRouter = router({
           tc.expectedOutput
         );
         const exec = await executePython(script);
+        if (exec.stderr && exec.stderr.trim()) {
+          terminalLines.push(`--- stderr (case ${tc.orderIndex + 1}) ---`);
+          terminalLines.push(exec.stderr.trim());
+        }
         if (exec.timedOut) {
-          results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)" });
+          results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)", stdout: "", stderr: "TLE" });
+          terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description} — Time Limit Exceeded`);
           continue;
         }
         try {
           const parsed = JSON.parse(exec.stdout || "{}");
-          results.push({
+          const r: TestCaseResult = {
             id: tc.id,
             description: tc.description,
             passed: parsed.passed === true,
             expected: tc.expectedOutput,
             actual: parsed.actual !== undefined ? JSON.stringify(parsed.actual) : exec.stdout,
             error: parsed.error,
-          });
+            stdout: exec.stdout,
+            stderr: exec.stderr,
+          };
+          results.push(r);
+          const icon = r.passed ? "✅" : "❌";
+          terminalLines.push(`${icon} Case ${tc.orderIndex + 1}: ${tc.description}`);
+          if (!r.passed) {
+            terminalLines.push(`   Expected: ${tc.expectedOutput}`);
+            terminalLines.push(`   Got:      ${r.actual}`);
+            if (r.error) terminalLines.push(`   Error:\n${r.error.split("\n").map(l => "   " + l).join("\n")}`);
+          }
         } catch {
-          results.push({
+          const r: TestCaseResult = {
             id: tc.id,
             description: tc.description,
             passed: false,
             expected: tc.expectedOutput,
             actual: exec.stdout,
             error: exec.stderr || "Failed to parse output",
-          });
+            stdout: exec.stdout,
+            stderr: exec.stderr,
+          };
+          results.push(r);
+          terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description}`);
+          if (exec.stdout && exec.stdout.trim()) {
+            terminalLines.push(`   stdout: ${exec.stdout.trim()}`);
+          }
+          terminalLines.push(`   ${exec.stderr?.trim() || "Failed to parse output"}`);
         }
       }
 
       const allPassed = results.every((r) => r.passed);
       const status = allPassed ? "accepted" : "wrong_answer";
+      const passed = results.filter((r) => r.passed).length;
+      const total = results.length;
+      const summary = allPassed
+        ? `\n✅ Accepted! All ${total} test cases passed.`
+        : `\n❌ Wrong Answer — ${passed}/${total} test cases passed.`;
 
       await createSubmission({
         userId: ctx.user.id,
@@ -142,7 +215,7 @@ export const problemsRouter = router({
         testResults: JSON.stringify(results),
       });
 
-      return { status, results };
+      return { status, results, terminalOutput: terminalLines.join("\n") + summary };
     }),
 
   // AI analysis of the user's solution
