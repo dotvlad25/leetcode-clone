@@ -453,7 +453,7 @@ export default function ProblemDetail() {
             <ResizablePanelGroup direction="vertical" className="h-full w-full">
 
               {/* Editor panel */}
-              <ResizablePanel defaultSize={65} minSize={20}>
+              <ResizablePanel defaultSize={65} minSize={15}>
                 <div className="h-full flex flex-col bg-[#1e1e1e] overflow-hidden">
                   {/* Editor tab bar */}
                   <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1">
@@ -517,6 +517,7 @@ export default function ProblemDetail() {
 
                   {/* Monaco editor */}
                   <div className="flex-1 overflow-hidden">
+                    {/* ... monaco editors ... */}
                     {editorTab === "solution" ? (
                       <Editor
                         height="100%"
@@ -569,95 +570,106 @@ export default function ProblemDetail() {
                       />
                     )}
                   </div>
+
+                  {/* Always-visible bottom tab strip — stays visible even when panel is collapsed */}
+                  <div className="shrink-0 border-t border-[#2d2d2d] bg-[#252526]">
+                    <Tabs value={activeBottomTab} onValueChange={(v) => {
+                      setActiveBottomTab(v);
+                      // If panel is collapsed, expand it when a tab is clicked
+                      if (!bottomOpen) {
+                        bottomPanelRef.current?.expand();
+                        setBottomOpen(true);
+                      }
+                    }}>
+                      <TabsList className="w-full justify-start rounded-none bg-transparent h-9 px-2 gap-0">
+                        {/* Chevron toggle */}
+                        <button
+                          onClick={() => {
+                            if (bottomOpen) {
+                              bottomPanelRef.current?.collapse();
+                            } else {
+                              bottomPanelRef.current?.expand();
+                            }
+                          }}
+                          className="p-1 rounded hover:bg-[#3a3a3a] transition-colors mr-2 shrink-0"
+                          title={bottomOpen ? "Collapse panel" : "Expand panel"}
+                        >
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${
+                              bottomOpen ? "" : "rotate-180"
+                            }`}
+                          />
+                        </button>
+                        <TabsTrigger
+                          value="output"
+                          className="text-xs data-[state=active]:text-foreground data-[state=active]:border-t-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pt-1 px-3 h-full"
+                        >
+                          <Terminal className="w-3 h-3 mr-1.5" />
+                          Output
+                          {isRunning && <Loader2 className="w-3 h-3 ml-1.5 animate-spin text-primary" />}
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="tests"
+                          className="text-xs data-[state=active]:text-foreground data-[state=active]:border-t-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pt-1 px-3 h-full"
+                        >
+                          Test Results
+                          {testResults.length > 0 && (
+                            <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${testResults.every(r => r.passed) ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
+                              {testResults.filter(r => r.passed).length}/{testResults.length}
+                            </span>
+                          )}
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="ai"
+                          className="text-xs data-[state=active]:text-foreground data-[state=active]:border-t-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pt-1 px-3 h-full"
+                        >
+                          AI Analysis
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="history"
+                          className="text-xs data-[state=active]:text-foreground data-[state=active]:border-t-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pt-1 px-3 h-full"
+                        >
+                          History
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
                 </div>
               </ResizablePanel>
-
-              <ResizableHandle withHandle className="bg-[#2d2d2d] hover:bg-primary/50 transition-colors" />
 
               {/* Single collapsible bottom panel with all tabs */}
               <ResizablePanel
                 ref={bottomPanelRef}
                 collapsible
                 collapsedSize={0}
-                defaultSize={35}
-                minSize={18}
+                defaultSize={0}
+                minSize={20}
                 onCollapse={() => setBottomOpen(false)}
                 onExpand={() => setBottomOpen(true)}
               >
-                <div className="h-full bg-[#1e1e1e] flex flex-col overflow-hidden border-t border-[#2d2d2d]">
-                  <Tabs value={activeBottomTab} onValueChange={setActiveBottomTab} className="h-full flex flex-col">
-                    {/* Tab bar with chevron toggle */}
-                    <TabsList className="w-full justify-start rounded-none border-b border-[#2d2d2d] bg-[#252526] h-9 px-2 gap-0 shrink-0">
-                      {/* Chevron toggle button */}
-                      <button
-                        onClick={() => {
-                          if (bottomOpen) bottomPanelRef.current?.collapse();
-                          else bottomPanelRef.current?.expand();
-                        }}
-                        className="p-1 rounded hover:bg-[#3a3a3a] transition-colors mr-2 shrink-0"
-                        title={bottomOpen ? "Collapse panel" : "Expand panel"}
-                      >
-                        <ChevronDown
-                          className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${
-                            bottomOpen ? "" : "rotate-180"
-                          }`}
-                        />
-                      </button>
-                      <TabsTrigger
-                        value="output"
-                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
-                      >
-                        <Terminal className="w-3 h-3 mr-1.5" />
-                        Output
-                        {isRunning && <Loader2 className="w-3 h-3 ml-1.5 animate-spin text-primary" />}
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="tests"
-                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
-                      >
-                        Test Results
-                        {testResults.length > 0 && (
-                          <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${testResults.every(r => r.passed) ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
-                            {testResults.filter(r => r.passed).length}/{testResults.length}
-                          </span>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="ai"
-                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
-                      >
-                        AI Analysis
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="history"
-                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
-                      >
-                        History
-                      </TabsTrigger>
-                    </TabsList>
-                    {/* Tab content */}
-                    <div className="flex-1 overflow-hidden">
-                      <TabsContent value="output" className="h-full m-0 overflow-hidden">
-                        <TerminalPanel output={terminalOutput} isRunning={isRunning} />
-                      </TabsContent>
-                      <TabsContent value="tests" className="h-full m-0 overflow-hidden">
-                        <div className="h-full overflow-y-auto overflow-x-hidden">
-                          <TestResultPanel results={testResults} status={submitStatus} />
-                        </div>
-                      </TabsContent>
-                      <TabsContent value="ai" className="h-full m-0 overflow-hidden">
-                        <div className="h-full overflow-y-auto overflow-x-hidden">
-                          <AIAnalysisPanel analysis={aiAnalysis} isLoading={isAnalyzing} />
-                        </div>
-                      </TabsContent>
-                      <TabsContent value="history" className="h-full m-0 overflow-hidden">
-                        <div className="h-full overflow-y-auto overflow-x-hidden">
-                          <SubmissionHistoryPanel slug={slug} />
-                        </div>
-                      </TabsContent>
-                    </div>
-                  </Tabs>
-                </div>
+                {/* Only the content area is inside the collapsible panel */}
+                <Tabs value={activeBottomTab} onValueChange={setActiveBottomTab} className="h-full flex flex-col">
+                  <div className="flex-1 overflow-hidden">
+                    <TabsContent value="output" className="h-full m-0 overflow-hidden">
+                      <TerminalPanel output={terminalOutput} isRunning={isRunning} />
+                    </TabsContent>
+                    <TabsContent value="tests" className="h-full m-0 overflow-hidden">
+                      <div className="h-full overflow-y-auto overflow-x-hidden">
+                        <TestResultPanel results={testResults} status={submitStatus} />
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="ai" className="h-full m-0 overflow-hidden">
+                      <div className="h-full overflow-y-auto overflow-x-hidden">
+                        <AIAnalysisPanel analysis={aiAnalysis} isLoading={isAnalyzing} />
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="history" className="h-full m-0 overflow-hidden">
+                      <div className="h-full overflow-y-auto overflow-x-hidden">
+                        <SubmissionHistoryPanel slug={slug} />
+                      </div>
+                    </TabsContent>
+                  </div>
+                </Tabs>
               </ResizablePanel>
 
             </ResizablePanelGroup>
