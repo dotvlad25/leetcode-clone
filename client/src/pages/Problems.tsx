@@ -63,8 +63,8 @@ export default function Problems() {
                         <Circle className="w-4 h-4 text-muted-foreground/40" />
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">{idx + 1}.</span>
+                   <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{p.number > 0 ? p.number : idx + 1}.</span>
                       <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                         {p.title}
                       </span>
@@ -85,4 +85,3 @@ export default function Problems() {
     </div>
   );
 }
-

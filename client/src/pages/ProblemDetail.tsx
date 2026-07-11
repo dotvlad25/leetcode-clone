@@ -53,7 +53,7 @@ type AIAnalysis = {
 };
 
 // ── Terminal Panel ─────────────────────────────────────────────────────────────
-function TerminalPanel({ output, isRunning }: { output: string; isRunning: boolean }) {
+function TerminalPanel({ output, isRunning, headerless }: { output: string; isRunning: boolean; headerless?: boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -61,17 +61,18 @@ function TerminalPanel({ output, isRunning }: { output: string; isRunning: boole
 
   return (
     <div className="h-full flex flex-col bg-[#0d0d0d] font-mono text-xs">
-      {/* Terminal header */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#2a2a2a] bg-[#1a1a1a] shrink-0">
-        <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="text-muted-foreground text-xs">Output</span>
-        {isRunning && (
-          <span className="ml-auto flex items-center gap-1 text-primary text-xs">
-            <Loader2 className="w-3 h-3 animate-spin" />
-            Running...
-          </span>
-        )}
-      </div>
+      {!headerless && (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#2a2a2a] bg-[#1a1a1a] shrink-0">
+          <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground text-xs">Output</span>
+          {isRunning && (
+            <span className="ml-auto flex items-center gap-1 text-primary text-xs">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Running...
+            </span>
+          )}
+        </div>
+      )}
       {/* Terminal body */}
       <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {!output && !isRunning ? (
@@ -437,7 +438,6 @@ export default function ProblemDetail() {
   if (isLoading) {
     return (
       <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-        <NavBar />
         <div className="container py-8 space-y-4">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-4 w-32" />
@@ -453,7 +453,6 @@ export default function ProblemDetail() {
   if (!problem) {
     return (
       <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-        <NavBar />
         <div className="container py-16 text-center">
           <h2 className="text-xl font-semibold">Problem not found</h2>
           <Link href="/problems">
@@ -466,53 +465,6 @@ export default function ProblemDetail() {
 
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <NavBar />
-
-      {/* Top bar */}
-      <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between gap-4 shrink-0 z-10">
-        <div className="flex items-center gap-3">
-          <Link href="/problems">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-1 px-2">
-              <ChevronLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Problems</span>
-            </Button>
-          </Link>
-          <div className="h-4 w-px bg-border" />
-          <h1 className="text-sm font-semibold text-foreground truncate max-w-xs">{problem.title}</h1>
-          <DifficultyBadge difficulty={problem.difficulty} />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="gap-1.5 border-border text-muted-foreground hover:text-foreground"
-          >
-            {isAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
-            AI Analysis
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleRun}
-            disabled={isRunning}
-            className="gap-1.5 border-border text-muted-foreground hover:text-foreground"
-          >
-            {isRunning && runMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-            Run
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleSubmit}
-            disabled={isRunning}
-            className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            {isRunning && submitMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-            Submit
-          </Button>
-        </div>
-      </div>
 
       {/* Main split layout */}
       <div className="flex-1 min-h-0 overflow-hidden">
@@ -538,6 +490,13 @@ export default function ProblemDetail() {
                 <div className="h-full flex flex-col bg-[#1e1e1e] overflow-hidden">
                   {/* Editor tab bar */}
                   <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1">
+                    {/* Back to problems */}
+                    <Link href="/problems">
+                      <button className="flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                    </Link>
+                    <div className="w-px h-4 bg-[#3a3a3a] mx-1" />
                     <button
                       onClick={() => setEditorTab("solution")}
                       className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
@@ -561,31 +520,31 @@ export default function ProblemDetail() {
                       test_cases.py
                       <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
                     </button>
-                    {/* Panel toggle buttons — right-aligned */}
+                    {/* Action buttons — right-aligned in the editor tab bar */}
                     <div className="ml-auto flex items-center gap-1 pr-2">
                       <button
-                        onClick={() => {
-                          if (terminalOpen) { terminalPanelRef.current?.collapse(); }
-                          else { terminalPanelRef.current?.expand(); }
-                        }}
-                        title={terminalOpen ? "Hide terminal" : "Show terminal"}
-                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors"
+                        onClick={handleAnalyze}
+                        disabled={isAnalyzing}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors disabled:opacity-50"
                       >
-                        <Terminal className="w-3 h-3" />
-                        Output
-                        {terminalOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                        {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
+                        AI
                       </button>
                       <button
-                        onClick={() => {
-                          if (resultsOpen) { resultsPanelRef.current?.collapse(); }
-                          else { resultsPanelRef.current?.expand(); }
-                        }}
-                        title={resultsOpen ? "Hide results" : "Show results"}
-                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors"
+                        onClick={handleRun}
+                        disabled={isRunning}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors disabled:opacity-50"
                       >
-                        <CheckCircle2 className="w-3 h-3" />
-                        Results
-                        {resultsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                        {isRunning && runMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                        Run
+                      </button>
+                      <button
+                        onClick={handleSubmit}
+                        disabled={isRunning}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] bg-primary/90 text-primary-foreground hover:bg-primary transition-colors disabled:opacity-50"
+                      >
+                        {isRunning && submitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                        Submit
                       </button>
                     </div>
                   </div>
@@ -655,12 +614,29 @@ export default function ProblemDetail() {
                 collapsible
                 collapsedSize={0}
                 defaultSize={0}
-                minSize={10}
-                maxSize={45}
+                minSize={15}
+                maxSize={50}
                 onCollapse={() => setTerminalOpen(false)}
                 onExpand={() => setTerminalOpen(true)}
               >
-                <TerminalPanel output={terminalOutput} isRunning={isRunning} />
+                <div className="h-full flex flex-col bg-[#0d0d0d]">
+                  {/* Terminal panel header with chevron toggle */}
+                  <button
+                    onClick={() => { terminalPanelRef.current?.collapse(); }}
+                    className="flex items-center gap-2 px-3 py-1.5 border-b border-[#2a2a2a] bg-[#1a1a1a] shrink-0 w-full hover:bg-[#222] transition-colors"
+                  >
+                    <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground font-medium">Output</span>
+                    {isRunning && (
+                      <span className="flex items-center gap-1 text-primary text-xs ml-2">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Running...
+                      </span>
+                    )}
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                  </button>
+                  <TerminalPanel output={terminalOutput} isRunning={isRunning} headerless />
+                </div>
               </ResizablePanel>
 
               <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors" />
@@ -671,13 +647,21 @@ export default function ProblemDetail() {
                 collapsible
                 collapsedSize={0}
                 defaultSize={0}
-                minSize={15}
+                minSize={20}
                 onCollapse={() => setResultsOpen(false)}
                 onExpand={() => setResultsOpen(true)}
               >
                 <div className="h-full border-t border-border bg-card flex flex-col overflow-hidden">
                   <Tabs value={activeBottomTab} onValueChange={setActiveBottomTab} className="h-full flex flex-col">
-                    <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-10 px-2 gap-1 shrink-0">
+                    <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-9 px-2 gap-1 shrink-0">
+                      {/* Chevron collapse button */}
+                      <button
+                        onClick={() => resultsPanelRef.current?.collapse()}
+                        className="p-1 rounded hover:bg-muted transition-colors mr-1"
+                        title="Collapse results"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
                       <TabsTrigger
                         value="tests"
                         className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2"

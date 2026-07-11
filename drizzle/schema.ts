@@ -18,6 +18,7 @@ export const users = mysqlTable("users", {
 
 export const problems = mysqlTable("problems", {
   id: int("id").autoincrement().primaryKey(),
+  number: int("number").notNull().default(0),
   slug: varchar("slug", { length: 128 }).notNull().unique(),
   title: text("title").notNull(),
   difficulty: mysqlEnum("difficulty", ["Easy", "Medium", "Hard"]).notNull(),

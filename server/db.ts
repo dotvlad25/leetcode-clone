@@ -59,11 +59,12 @@ export async function listProblems() {
   if (!db) return [];
   return db.select({
     id: problems.id,
+    number: problems.number,
     slug: problems.slug,
     title: problems.title,
     difficulty: problems.difficulty,
     createdAt: problems.createdAt,
-  }).from(problems).orderBy(problems.id);
+  }).from(problems).orderBy(problems.number);
 }
 
 export async function getProblemBySlug(slug: string) {
