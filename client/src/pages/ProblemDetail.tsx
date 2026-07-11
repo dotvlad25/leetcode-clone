@@ -374,7 +374,13 @@ export default function ProblemDetail() {
       if (passed === total) toast.success(`All ${total} tests passed!`);
       else toast.error(`${passed}/${total} tests passed`);
     },
-    onError: (err) => toast.error(`Execution error: ${err.message}`),
+    onError: (err) => {
+      setTerminalOutput(`\u274c Execution error:\n${err.message}`);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
+      toast.error(`Execution error: ${err.message}`);
+    },
   });
 
   const submitMutation = trpc.problems.submit.useMutation({
@@ -388,7 +394,13 @@ export default function ProblemDetail() {
       if (data.status === "accepted") toast.success("Accepted! All tests passed.");
       else toast.error("Wrong Answer — check your test results.");
     },
-    onError: (err) => toast.error(`Submit error: ${err.message}`),
+    onError: (err) => {
+      setTerminalOutput(`\u274c Submit error:\n${err.message}`);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
+      toast.error(`Submit error: ${err.message}`);
+    },
   });
 
   const analyzeMutation = trpc.problems.analyzeCode.useMutation({
@@ -398,7 +410,13 @@ export default function ProblemDetail() {
       bottomPanelRef.current?.expand();
       setBottomOpen(true);
     },
-    onError: (err) => toast.error(`AI analysis error: ${err.message}`),
+    onError: (err) => {
+      setTerminalOutput(`\u274c AI analysis error:\n${err.message}`);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
+      toast.error(`AI analysis error: ${err.message}`);
+    },
   });
 
   const currentCode = code || problem?.starterCode || "";
