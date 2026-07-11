@@ -4,7 +4,6 @@ import Editor from "@monaco-editor/react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
-import NavBar from "@/components/NavBar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +11,7 @@ import { toast } from "sonner";
 import {
   Play, Send, Brain, ChevronLeft, CheckCircle2, XCircle,
   Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
-  Code2, FlaskConical, ChevronUp, ChevronDown,
+  Code2, FlaskConical, ChevronDown,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import {
@@ -52,8 +51,8 @@ type AIAnalysis = {
   optimizedApproach: string;
 };
 
-// ── Terminal Panel ─────────────────────────────────────────────────────────────
-function TerminalPanel({ output, isRunning, headerless }: { output: string; isRunning: boolean; headerless?: boolean }) {
+// ── Terminal / Output Tab ──────────────────────────────────────────────────────
+function TerminalPanel({ output, isRunning }: { output: string; isRunning: boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -61,19 +60,6 @@ function TerminalPanel({ output, isRunning, headerless }: { output: string; isRu
 
   return (
     <div className="h-full flex flex-col bg-[#0d0d0d] font-mono text-xs">
-      {!headerless && (
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#2a2a2a] bg-[#1a1a1a] shrink-0">
-          <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-muted-foreground text-xs">Output</span>
-          {isRunning && (
-            <span className="ml-auto flex items-center gap-1 text-primary text-xs">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Running...
-            </span>
-          )}
-        </div>
-      )}
-      {/* Terminal body */}
       <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {!output && !isRunning ? (
           <p className="text-[#555] select-none">$ Run or Submit to see output here...</p>
@@ -116,11 +102,9 @@ function TestResultPanel({ results, status }: { results: TestResult[]; status: s
       </div>
     );
   }
-
   const passed = results.filter((r) => r.passed).length;
   const total = results.length;
   const allPassed = passed === total;
-
   return (
     <div className="p-4 space-y-3">
       <div className={`flex items-center gap-3 p-3 rounded-lg ${allPassed ? "test-pass" : "test-fail"}`}>
@@ -333,14 +317,12 @@ export default function ProblemDetail() {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
-  const [activeBottomTab, setActiveBottomTab] = useState("tests");
+  const [activeBottomTab, setActiveBottomTab] = useState("output");
   const [terminalOutput, setTerminalOutput] = useState<string>("");
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [resultsOpen, setResultsOpen] = useState(false);
-  const terminalPanelRef = useRef<ImperativePanelHandle>(null);
-  const resultsPanelRef = useRef<ImperativePanelHandle>(null);
+  const [bottomOpen, setBottomOpen] = useState(false);
+  const bottomPanelRef = useRef<ImperativePanelHandle>(null);
 
-  // Lock page scroll while on the problem detail view; restore on unmount
+  // Lock page scroll while on this page
   useEffect(() => {
     const prevBody = document.body.style.overflow;
     const prevHtml = document.documentElement.style.overflow;
@@ -363,12 +345,9 @@ export default function ProblemDetail() {
     onSuccess: (data) => {
       setTestResults(data.results);
       setTerminalOutput(data.terminalOutput);
-      setActiveBottomTab("tests");
-      // Auto-expand both panels when run completes
-      terminalPanelRef.current?.expand();
-      resultsPanelRef.current?.expand();
-      setTerminalOpen(true);
-      setResultsOpen(true);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
       const passed = data.results.filter((r) => r.passed).length;
       const total = data.results.length;
       if (passed === total) toast.success(`All ${total} tests passed!`);
@@ -382,11 +361,9 @@ export default function ProblemDetail() {
       setTestResults(data.results);
       setSubmitStatus(data.status);
       setTerminalOutput(data.terminalOutput);
-      setActiveBottomTab("tests");
-      terminalPanelRef.current?.expand();
-      resultsPanelRef.current?.expand();
-      setTerminalOpen(true);
-      setResultsOpen(true);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
       if (data.status === "accepted") toast.success("Accepted! All tests passed.");
       else toast.error("Wrong Answer — check your test results.");
     },
@@ -397,8 +374,8 @@ export default function ProblemDetail() {
     onSuccess: (data) => {
       setAiAnalysis(data as AIAnalysis);
       setActiveBottomTab("ai");
-      resultsPanelRef.current?.expand();
-      setResultsOpen(true);
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
     },
     onError: (err) => toast.error(`AI analysis error: ${err.message}`),
   });
@@ -410,11 +387,6 @@ export default function ProblemDetail() {
   const handleRun = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
-    // Collapse panels while running so the editor is maximised; they'll re-open on success
-    terminalPanelRef.current?.collapse();
-    resultsPanelRef.current?.collapse();
-    setTerminalOpen(false);
-    setResultsOpen(false);
     runMutation.mutate({ slug, code: currentCode });
   };
 
@@ -422,10 +394,6 @@ export default function ProblemDetail() {
     if (!isAuthenticated) { startLogin(); return; }
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
-    terminalPanelRef.current?.collapse();
-    resultsPanelRef.current?.collapse();
-    setTerminalOpen(false);
-    setResultsOpen(false);
     submitMutation.mutate({ slug, code: currentCode });
   };
 
@@ -465,7 +433,6 @@ export default function ProblemDetail() {
 
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-
       {/* Main split layout */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
@@ -481,16 +448,15 @@ export default function ProblemDetail() {
 
           <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors" />
 
-          {/* Right: Editor + Terminal + Results */}
+          {/* Right: Editor (top) + single collapsible bottom panel */}
           <ResizablePanel defaultSize={58} minSize={35}>
             <ResizablePanelGroup direction="vertical" className="h-full w-full">
 
-              {/* Editor panel with Solution / Unit Tests tab switcher */}
-              <ResizablePanel defaultSize={100} minSize={20}>
+              {/* Editor panel */}
+              <ResizablePanel defaultSize={65} minSize={20}>
                 <div className="h-full flex flex-col bg-[#1e1e1e] overflow-hidden">
                   {/* Editor tab bar */}
                   <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1">
-                    {/* Back to problems */}
                     <Link href="/problems">
                       <button className="flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
                         <ChevronLeft className="w-3.5 h-3.5" />
@@ -520,7 +486,7 @@ export default function ProblemDetail() {
                       test_cases.py
                       <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
                     </button>
-                    {/* Action buttons — right-aligned in the editor tab bar */}
+                    {/* Action buttons */}
                     <div className="ml-auto flex items-center gap-1 pr-2">
                       <button
                         onClick={handleAnalyze}
@@ -608,85 +574,72 @@ export default function ProblemDetail() {
 
               <ResizableHandle withHandle className="bg-[#2d2d2d] hover:bg-primary/50 transition-colors" />
 
-              {/* Terminal output panel */}
+              {/* Single collapsible bottom panel with all tabs */}
               <ResizablePanel
-                ref={terminalPanelRef}
+                ref={bottomPanelRef}
                 collapsible
                 collapsedSize={0}
-                defaultSize={0}
-                minSize={15}
-                maxSize={50}
-                onCollapse={() => setTerminalOpen(false)}
-                onExpand={() => setTerminalOpen(true)}
+                defaultSize={35}
+                minSize={18}
+                onCollapse={() => setBottomOpen(false)}
+                onExpand={() => setBottomOpen(true)}
               >
-                <div className="h-full flex flex-col bg-[#0d0d0d]">
-                  {/* Terminal panel header with chevron toggle */}
-                  <button
-                    onClick={() => { terminalPanelRef.current?.collapse(); }}
-                    className="flex items-center gap-2 px-3 py-1.5 border-b border-[#2a2a2a] bg-[#1a1a1a] shrink-0 w-full hover:bg-[#222] transition-colors"
-                  >
-                    <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground font-medium">Output</span>
-                    {isRunning && (
-                      <span className="flex items-center gap-1 text-primary text-xs ml-2">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Running...
-                      </span>
-                    )}
-                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
-                  </button>
-                  <TerminalPanel output={terminalOutput} isRunning={isRunning} headerless />
-                </div>
-              </ResizablePanel>
-
-              <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors" />
-
-              {/* Bottom tabs: Test Results / AI Analysis / History */}
-              <ResizablePanel
-                ref={resultsPanelRef}
-                collapsible
-                collapsedSize={0}
-                defaultSize={0}
-                minSize={20}
-                onCollapse={() => setResultsOpen(false)}
-                onExpand={() => setResultsOpen(true)}
-              >
-                <div className="h-full border-t border-border bg-card flex flex-col overflow-hidden">
+                <div className="h-full bg-[#1e1e1e] flex flex-col overflow-hidden border-t border-[#2d2d2d]">
                   <Tabs value={activeBottomTab} onValueChange={setActiveBottomTab} className="h-full flex flex-col">
-                    <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-9 px-2 gap-1 shrink-0">
-                      {/* Chevron collapse button */}
+                    {/* Tab bar with chevron toggle */}
+                    <TabsList className="w-full justify-start rounded-none border-b border-[#2d2d2d] bg-[#252526] h-9 px-2 gap-0 shrink-0">
+                      {/* Chevron toggle button */}
                       <button
-                        onClick={() => resultsPanelRef.current?.collapse()}
-                        className="p-1 rounded hover:bg-muted transition-colors mr-1"
-                        title="Collapse results"
+                        onClick={() => {
+                          if (bottomOpen) bottomPanelRef.current?.collapse();
+                          else bottomPanelRef.current?.expand();
+                        }}
+                        className="p-1 rounded hover:bg-[#3a3a3a] transition-colors mr-2 shrink-0"
+                        title={bottomOpen ? "Collapse panel" : "Expand panel"}
                       >
-                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${
+                            bottomOpen ? "" : "rotate-180"
+                          }`}
+                        />
                       </button>
                       <TabsTrigger
+                        value="output"
+                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
+                      >
+                        <Terminal className="w-3 h-3 mr-1.5" />
+                        Output
+                        {isRunning && <Loader2 className="w-3 h-3 ml-1.5 animate-spin text-primary" />}
+                      </TabsTrigger>
+                      <TabsTrigger
                         value="tests"
-                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2"
+                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
                       >
                         Test Results
                         {testResults.length > 0 && (
-                          <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${testResults.every(r => r.passed) ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
+                          <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${testResults.every(r => r.passed) ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
                             {testResults.filter(r => r.passed).length}/{testResults.length}
                           </span>
                         )}
                       </TabsTrigger>
                       <TabsTrigger
                         value="ai"
-                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2"
+                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
                       >
                         AI Analysis
                       </TabsTrigger>
                       <TabsTrigger
                         value="history"
-                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2"
+                        className="text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=inactive]:text-muted-foreground rounded-none pb-2 px-3 h-full"
                       >
                         History
                       </TabsTrigger>
                     </TabsList>
+                    {/* Tab content */}
                     <div className="flex-1 overflow-hidden">
+                      <TabsContent value="output" className="h-full m-0 overflow-hidden">
+                        <TerminalPanel output={terminalOutput} isRunning={isRunning} />
+                      </TabsContent>
                       <TabsContent value="tests" className="h-full m-0 overflow-hidden">
                         <div className="h-full overflow-y-auto overflow-x-hidden">
                           <TestResultPanel results={testResults} status={submitStatus} />
