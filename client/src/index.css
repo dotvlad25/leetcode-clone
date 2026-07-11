@@ -58,6 +58,49 @@
   .difficulty-easy {
     color: var(--color-easy);
   }
+
+  /* Dark code blocks inside problem descriptions */
+  .prose code:not(pre code) {
+    background-color: oklch(0.22 0.01 240);
+    color: oklch(0.85 0.04 200);
+    padding: 0.1em 0.35em;
+    border-radius: 0.25rem;
+    font-size: 0.85em;
+    font-family: var(--font-mono);
+    border: 1px solid oklch(0.28 0.01 240);
+  }
+  .prose pre {
+    background-color: oklch(0.16 0.01 240) !important;
+    border: 1px solid oklch(0.25 0.01 240);
+    border-radius: 0.375rem;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+  }
+  .prose pre code {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    color: oklch(0.88 0.02 220);
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+  /* Shiki-rendered code blocks — force dark background */
+  .prose .shiki,
+  .prose [data-streamdown="code-block"] pre,
+  .prose figure pre {
+    background-color: oklch(0.16 0.01 240) !important;
+    border: 1px solid oklch(0.25 0.01 240) !important;
+    border-radius: 0.375rem !important;
+  }
+  /* Inline code spans rendered by Streamdown */
+  .prose :not(pre) > code {
+    background-color: oklch(0.22 0.01 240) !important;
+    color: oklch(0.85 0.04 200) !important;
+    padding: 0.1em 0.35em !important;
+    border-radius: 0.25rem !important;
+    font-size: 0.85em !important;
+    border: 1px solid oklch(0.28 0.01 240) !important;
+  }
   .difficulty-medium {
     color: var(--color-medium);
   }

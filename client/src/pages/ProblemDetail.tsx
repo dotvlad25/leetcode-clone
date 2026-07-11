@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import {
   Play, Send, Brain, ChevronLeft, CheckCircle2, XCircle,
   Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
-  Code2, FlaskConical,
+  Code2, FlaskConical, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import {
@@ -20,6 +20,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const cls =
@@ -333,6 +334,10 @@ export default function ProblemDetail() {
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState("tests");
   const [terminalOutput, setTerminalOutput] = useState<string>("");
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const terminalPanelRef = useRef<ImperativePanelHandle>(null);
+  const resultsPanelRef = useRef<ImperativePanelHandle>(null);
 
   // Lock page scroll while on the problem detail view; restore on unmount
   useEffect(() => {
@@ -358,6 +363,11 @@ export default function ProblemDetail() {
       setTestResults(data.results);
       setTerminalOutput(data.terminalOutput);
       setActiveBottomTab("tests");
+      // Auto-expand both panels when run completes
+      terminalPanelRef.current?.expand();
+      resultsPanelRef.current?.expand();
+      setTerminalOpen(true);
+      setResultsOpen(true);
       const passed = data.results.filter((r) => r.passed).length;
       const total = data.results.length;
       if (passed === total) toast.success(`All ${total} tests passed!`);
@@ -372,6 +382,10 @@ export default function ProblemDetail() {
       setSubmitStatus(data.status);
       setTerminalOutput(data.terminalOutput);
       setActiveBottomTab("tests");
+      terminalPanelRef.current?.expand();
+      resultsPanelRef.current?.expand();
+      setTerminalOpen(true);
+      setResultsOpen(true);
       if (data.status === "accepted") toast.success("Accepted! All tests passed.");
       else toast.error("Wrong Answer — check your test results.");
     },
@@ -382,6 +396,8 @@ export default function ProblemDetail() {
     onSuccess: (data) => {
       setAiAnalysis(data as AIAnalysis);
       setActiveBottomTab("ai");
+      resultsPanelRef.current?.expand();
+      setResultsOpen(true);
     },
     onError: (err) => toast.error(`AI analysis error: ${err.message}`),
   });
@@ -393,6 +409,11 @@ export default function ProblemDetail() {
   const handleRun = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
+    // Collapse panels while running so the editor is maximised; they'll re-open on success
+    terminalPanelRef.current?.collapse();
+    resultsPanelRef.current?.collapse();
+    setTerminalOpen(false);
+    setResultsOpen(false);
     runMutation.mutate({ slug, code: currentCode });
   };
 
@@ -400,6 +421,10 @@ export default function ProblemDetail() {
     if (!isAuthenticated) { startLogin(); return; }
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
+    terminalPanelRef.current?.collapse();
+    resultsPanelRef.current?.collapse();
+    setTerminalOpen(false);
+    setResultsOpen(false);
     submitMutation.mutate({ slug, code: currentCode });
   };
 
@@ -497,7 +522,7 @@ export default function ProblemDetail() {
           <ResizablePanel defaultSize={42} minSize={25} maxSize={65}>
             <div className="h-full overflow-y-auto overflow-x-hidden p-5">
               <div className="prose prose-sm prose-invert max-w-none">
-                <Streamdown>{problem.description}</Streamdown>
+                <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{problem.description}</Streamdown>
               </div>
             </div>
           </ResizablePanel>
@@ -509,7 +534,7 @@ export default function ProblemDetail() {
             <ResizablePanelGroup direction="vertical" className="h-full w-full">
 
               {/* Editor panel with Solution / Unit Tests tab switcher */}
-              <ResizablePanel defaultSize={55} minSize={20}>
+              <ResizablePanel defaultSize={100} minSize={20}>
                 <div className="h-full flex flex-col bg-[#1e1e1e] overflow-hidden">
                   {/* Editor tab bar */}
                   <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1">
@@ -536,6 +561,33 @@ export default function ProblemDetail() {
                       test_cases.py
                       <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
                     </button>
+                    {/* Panel toggle buttons — right-aligned */}
+                    <div className="ml-auto flex items-center gap-1 pr-2">
+                      <button
+                        onClick={() => {
+                          if (terminalOpen) { terminalPanelRef.current?.collapse(); }
+                          else { terminalPanelRef.current?.expand(); }
+                        }}
+                        title={terminalOpen ? "Hide terminal" : "Show terminal"}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors"
+                      >
+                        <Terminal className="w-3 h-3" />
+                        Output
+                        {terminalOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (resultsOpen) { resultsPanelRef.current?.collapse(); }
+                          else { resultsPanelRef.current?.expand(); }
+                        }}
+                        title={resultsOpen ? "Hide results" : "Show results"}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        Results
+                        {resultsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Monaco editor */}
@@ -598,14 +650,31 @@ export default function ProblemDetail() {
               <ResizableHandle withHandle className="bg-[#2d2d2d] hover:bg-primary/50 transition-colors" />
 
               {/* Terminal output panel */}
-              <ResizablePanel defaultSize={20} minSize={8} maxSize={50}>
+              <ResizablePanel
+                ref={terminalPanelRef}
+                collapsible
+                collapsedSize={0}
+                defaultSize={0}
+                minSize={10}
+                maxSize={45}
+                onCollapse={() => setTerminalOpen(false)}
+                onExpand={() => setTerminalOpen(true)}
+              >
                 <TerminalPanel output={terminalOutput} isRunning={isRunning} />
               </ResizablePanel>
 
               <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors" />
 
               {/* Bottom tabs: Test Results / AI Analysis / History */}
-              <ResizablePanel defaultSize={25} minSize={12}>
+              <ResizablePanel
+                ref={resultsPanelRef}
+                collapsible
+                collapsedSize={0}
+                defaultSize={0}
+                minSize={15}
+                onCollapse={() => setResultsOpen(false)}
+                onExpand={() => setResultsOpen(true)}
+              >
                 <div className="h-full border-t border-border bg-card flex flex-col overflow-hidden">
                   <Tabs value={activeBottomTab} onValueChange={setActiveBottomTab} className="h-full flex flex-col">
                     <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-10 px-2 gap-1 shrink-0">
