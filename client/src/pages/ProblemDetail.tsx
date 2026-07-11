@@ -332,6 +332,30 @@ export default function ProblemDetail() {
   const { data: problem, isLoading } = trpc.problems.getBySlug.useQuery({ slug });
   const [code, setCode] = useState<string>("");
   const [editorTab, setEditorTab] = useState<"solution" | "tests">("solution");
+
+  // ── localStorage draft persistence ──────────────────────────────────────────
+  const draftKey = `pycode-draft-${slug}`;
+
+  // Load saved draft on first problem load
+  useEffect(() => {
+    if (!problem) return;
+    const saved = localStorage.getItem(draftKey);
+    if (saved !== null) {
+      setCode(saved);
+    } else {
+      setCode(problem.starterCode);
+    }
+  }, [problem?.id]);  // only run when the problem changes (not on every re-render)
+
+  // Auto-save draft whenever code changes (debounced 500ms)
+  useEffect(() => {
+    if (!problem || !code) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem(draftKey, code);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [code, draftKey]);
+
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [selectedVariantKey, setSelectedVariantKey] = useState<string>("default");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
@@ -357,7 +381,7 @@ export default function ProblemDetail() {
 
   const handleEditorMount = useCallback(
     (_editor: unknown, _monaco: unknown) => {
-      if (problem && !code) setCode(problem.starterCode);
+      // Draft loading is handled by the localStorage useEffect above; nothing to do here
     },
     [problem, code]
   );
@@ -685,8 +709,8 @@ export default function ProblemDetail() {
 
                   {/* Monaco editor */}
                   <div className="flex-1 overflow-hidden">
-                    {/* ... monaco editors ... */}
-                    {editorTab === "solution" ? (
+                    {/* Both editors are always mounted; CSS display swap prevents re-mount on tab switch */}
+                    <div style={{ display: editorTab === "solution" ? "block" : "none" }} className="h-full">
                       <Editor
                         height="100%"
                         defaultLanguage="python"
@@ -712,7 +736,8 @@ export default function ProblemDetail() {
                           bracketPairColorization: { enabled: true },
                         }}
                       />
-                    ) : (
+                    </div>
+                    <div style={{ display: editorTab === "tests" ? "block" : "none" }} className="h-full">
                       <Editor
                         height="100%"
                         defaultLanguage="python"
@@ -736,7 +761,7 @@ export default function ProblemDetail() {
                           domReadOnly: true,
                         }}
                       />
-                    )}
+                    </div>
                   </div>
 
                   {/* Always-visible bottom tab strip — stays visible even when panel is collapsed */}
@@ -861,6 +886,7 @@ export default function ProblemDetail() {
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => {
                 if (problem?.starterCode) setCode(problem.starterCode);
+                localStorage.removeItem(draftKey);
                 setShowResetConfirm(false);
                 toast.success("Code reset to starter template");
               }}
