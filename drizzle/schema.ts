@@ -1,17 +1,11 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { relations } from "drizzle-orm";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -22,7 +16,54 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+export const problems = mysqlTable("problems", {
+  id: int("id").autoincrement().primaryKey(),
+  slug: varchar("slug", { length: 128 }).notNull().unique(),
+  title: varchar("title", { length: 256 }).notNull(),
+  difficulty: mysqlEnum("difficulty", ["Easy", "Medium", "Hard"]).notNull(),
+  description: text("description").notNull(),
+  starterCode: text("starterCode").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const testCases = mysqlTable("test_cases", {
+  id: int("id").autoincrement().primaryKey(),
+  problemId: int("problemId").notNull(),
+  description: varchar("description", { length: 512 }).notNull(),
+  inputData: text("inputData").notNull(),
+  expectedOutput: text("expectedOutput").notNull(),
+  orderIndex: int("orderIndex").notNull().default(0),
+});
+
+export const submissions = mysqlTable("submissions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  problemId: int("problemId").notNull(),
+  code: text("code").notNull(),
+  status: mysqlEnum("status", ["accepted", "wrong_answer", "error", "run"]).notNull(),
+  testResults: text("testResults").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export type Problem = typeof problems.$inferSelect;
+export type InsertProblem = typeof problems.$inferInsert;
+export type TestCase = typeof testCases.$inferSelect;
+export type InsertTestCase = typeof testCases.$inferInsert;
+export type Submission = typeof submissions.$inferSelect;
+export type InsertSubmission = typeof submissions.$inferInsert;
 
-// TODO: Add your tables here
+export const problemsRelations = relations(problems, ({ many }) => ({
+  testCases: many(testCases),
+  submissions: many(submissions),
+}));
+
+export const testCasesRelations = relations(testCases, ({ one }) => ({
+  problem: one(problems, { fields: [testCases.problemId], references: [problems.id] }),
+}));
+
+export const submissionsRelations = relations(submissions, ({ one }) => ({
+  user: one(users, { fields: [submissions.userId], references: [users.id] }),
+  problem: one(problems, { fields: [submissions.problemId], references: [problems.id] }),
+}));
