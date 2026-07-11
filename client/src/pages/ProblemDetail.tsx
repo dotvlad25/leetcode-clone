@@ -9,6 +9,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Play, Send, Brain, ChevronLeft, CheckCircle2, XCircle,
   Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
   Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb,
@@ -331,6 +341,7 @@ export default function ProblemDetail() {
   const [bottomOpen, setBottomOpen] = useState(false);
   const [leftTab, setLeftTab] = useState<"instructions" | "solution">("instructions");
   const bottomPanelRef = useRef<ImperativePanelHandle>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Lock page scroll while on this page
   useEffect(() => {
@@ -398,7 +409,9 @@ export default function ProblemDetail() {
   type SolutionVariant = { key: string; label: string; code: string; explanation: string };
   const solutionVariants: SolutionVariant[] = (() => {
     if (!problem?.solutionVariants) return [];
-    try { return JSON.parse(problem.solutionVariants) as SolutionVariant[]; } catch { return []; }
+    // superjson may return it already parsed as an array, or as a raw JSON string
+    if (Array.isArray(problem.solutionVariants)) return problem.solutionVariants as SolutionVariant[];
+    try { return JSON.parse(problem.solutionVariants as unknown as string) as SolutionVariant[]; } catch { return []; }
   })();
   const hasVariants = solutionVariants.length > 0;
   const activeVariant = hasVariants
@@ -617,9 +630,9 @@ export default function ProblemDetail() {
                     <div className="ml-auto flex items-center gap-1 pr-2">
                       {editorTab === "solution" && (
                         <button
-                          onClick={() => setCode(problem.starterCode)}
                           title="Reset to starter code"
                           className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors"
+                          onClick={() => setShowResetConfirm(true)}
                         >
                           <RotateCcw className="w-3 h-3" />
                           Reset
@@ -813,6 +826,32 @@ export default function ProblemDetail() {
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
+      {/* Reset confirmation modal */}
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent className="bg-[#1e1e1e] border-[#3a3a3a] text-foreground">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset to Starter Code?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This will permanently delete your current code and restore the original function signature. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-[#3a3a3a] text-foreground hover:bg-[#2d2d2d]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (problem?.starterCode) setCode(problem.starterCode);
+                setShowResetConfirm(false);
+                toast.success("Code reset to starter template");
+              }}
+            >
+              Reset Code
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
