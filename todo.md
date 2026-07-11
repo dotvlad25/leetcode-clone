@@ -54,3 +54,8 @@
 - [x] Write expert-reviewed solutions with explanations for LC1236
 - [x] Write expert-reviewed solutions with explanations for LC1752
 - [x] Seed all 7 solutions into the database
+- [x] Replace LC146 OrderedDict solution with manual doubly-linked list implementation
+
+## Pending Features
+- [x] Add solution variant dropdown for LC146 (OrderedDict vs manual DLL)
+- [x] Add Reset to Starter Code button in editor toolbar

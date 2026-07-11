@@ -13,6 +13,14 @@ import {
   Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
   Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb,
 } from "lucide-react";
+import { RotateCcw } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Streamdown } from "streamdown";
 import {
   ResizablePanelGroup,
@@ -315,6 +323,7 @@ export default function ProblemDetail() {
   const [code, setCode] = useState<string>("");
   const [editorTab, setEditorTab] = useState<"solution" | "tests">("solution");
   const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [selectedVariantKey, setSelectedVariantKey] = useState<string>("default");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState("output");
@@ -384,6 +393,19 @@ export default function ProblemDetail() {
   const currentCode = code || problem?.starterCode || "";
   const isRunning = runMutation.isPending || submitMutation.isPending;
   const isAnalyzing = analyzeMutation.isPending;
+
+  // Parse solution variants (JSON stored as text column)
+  type SolutionVariant = { key: string; label: string; code: string; explanation: string };
+  const solutionVariants: SolutionVariant[] = (() => {
+    if (!problem?.solutionVariants) return [];
+    try { return JSON.parse(problem.solutionVariants) as SolutionVariant[]; } catch { return []; }
+  })();
+  const hasVariants = solutionVariants.length > 0;
+  const activeVariant = hasVariants
+    ? (solutionVariants.find(v => v.key === selectedVariantKey) ?? solutionVariants[0])
+    : null;
+  const displaySolution = activeVariant ? activeVariant.code : problem?.solution ?? null;
+  const displayExplanation = activeVariant ? activeVariant.explanation : problem?.solutionExplanation ?? null;
 
   const handleRun = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
@@ -487,22 +509,42 @@ export default function ProblemDetail() {
                     {problem.solution ? (
                       <>
                         {/* Solution explanation */}
-                        {problem.solutionExplanation && (
+                        {/* Variant selector */}
+                        {hasVariants && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground shrink-0">Approach:</span>
+                            <Select value={selectedVariantKey} onValueChange={setSelectedVariantKey}>
+                              <SelectTrigger className="h-7 text-xs bg-[#252526] border-[#3a3a3a] text-foreground w-64">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-[#252526] border-[#3a3a3a]">
+                                {solutionVariants.map(v => (
+                                  <SelectItem key={v.key} value={v.key} className="text-xs text-foreground focus:bg-[#3a3a3a]">
+                                    {v.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {displayExplanation && (
                           <div className="prose prose-sm prose-invert max-w-none">
-                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{problem.solutionExplanation}</Streamdown>
+                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{displayExplanation}</Streamdown>
                           </div>
                         )}
                         {/* Solution code */}
                         <div className="rounded-lg overflow-hidden border border-[#3a3a3a]">
                           <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3a3a3a]">
                             <Code2 className="w-3.5 h-3.5 text-primary" />
-                            <span className="text-xs font-medium text-muted-foreground">solution.py</span>
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {activeVariant ? activeVariant.label : "solution.py"}
+                            </span>
                           </div>
                           <Editor
                             height="400px"
                             defaultLanguage="python"
                             language="python"
-                            value={problem.solution}
+                            value={displaySolution ?? ""}
                             theme="vs-dark"
                             options={{
                               fontSize: 13,
@@ -573,6 +615,16 @@ export default function ProblemDetail() {
                     </button>
                     {/* Action buttons */}
                     <div className="ml-auto flex items-center gap-1 pr-2">
+                      {editorTab === "solution" && (
+                        <button
+                          onClick={() => setCode(problem.starterCode)}
+                          title="Reset to starter code"
+                          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Reset
+                        </button>
+                      )}
                       <button
                         onClick={handleAnalyze}
                         disabled={isAnalyzing}

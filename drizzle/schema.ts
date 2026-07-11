@@ -26,6 +26,7 @@ export const problems = mysqlTable("problems", {
   starterCode: text("starterCode").notNull(),
   solution: text("solution"),
   solutionExplanation: text("solutionExplanation"),
+  solutionVariants: text("solutionVariants"),
   methodName: varchar("methodName", { length: 64 }).default("findDuplicate").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
