@@ -21,7 +21,7 @@ import {
 import {
   Play, Send, Brain, ChevronLeft, CheckCircle2, XCircle,
   Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
-  Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb,
+  Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb, Save,
 } from "lucide-react";
 import { RotateCcw } from "lucide-react";
 import {
@@ -352,6 +352,7 @@ export default function ProblemDetail() {
     if (!problem || !code) return;
     const timer = setTimeout(() => {
       localStorage.setItem(draftKey, code);
+      setLastSavedAt(new Date());
     }, 500);
     return () => clearTimeout(timer);
   }, [code, draftKey]);
@@ -366,6 +367,7 @@ export default function ProblemDetail() {
   const [leftTab, setLeftTab] = useState<"instructions" | "solution">("instructions");
   const bottomPanelRef = useRef<ImperativePanelHandle>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   // Lock page scroll while on this page
   useEffect(() => {
@@ -670,6 +672,12 @@ export default function ProblemDetail() {
                     </button>
                     {/* Action buttons */}
                     <div className="ml-auto flex items-center gap-1 pr-2">
+                      {lastSavedAt && editorTab === "solution" && (
+                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60 mr-2 select-none">
+                          <Save className="w-2.5 h-2.5" />
+                          Saved {lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </span>
+                      )}
                       {editorTab === "solution" && (
                         <button
                           title="Reset to starter code"
