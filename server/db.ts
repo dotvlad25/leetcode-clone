@@ -1,6 +1,9 @@
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, problems, testCases, submissions, InsertSubmission } from "../drizzle/schema";
+import {
+  InsertUser, users, problems, testCases, submissions, InsertSubmission,
+  problemStages, stageTestCases, InsertProblemStage, InsertStageTestCase,
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -63,6 +66,8 @@ export async function listProblems() {
     slug: problems.slug,
     title: problems.title,
     difficulty: problems.difficulty,
+    isStaged: problems.isStaged,
+    tags: problems.tags,
     createdAt: problems.createdAt,
   }).from(problems).orderBy(problems.number);
 }
@@ -125,6 +130,44 @@ export async function getAcceptedProblemIds(userId: number): Promise<number[]> {
 
 // ── Seeding ────────────────────────────────────────────────────────────────
 
+// ── Problem Stages ─────────────────────────────────────────────────────────
+
+export async function getStagesForProblem(problemId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(problemStages)
+    .where(eq(problemStages.problemId, problemId))
+    .orderBy(problemStages.stageNumber);
+}
+
+export async function getTestCasesForStage(stageId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(stageTestCases)
+    .where(eq(stageTestCases.stageId, stageId))
+    .orderBy(stageTestCases.orderIndex);
+}
+
+/** Returns all test cases for stages 1..stageNumber (cumulative). */
+export async function getCumulativeTestCasesForStage(problemId: number, stageNumber: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const stages = await db.select().from(problemStages)
+    .where(eq(problemStages.problemId, problemId))
+    .orderBy(problemStages.stageNumber);
+  const relevantStages = stages.filter(s => s.stageNumber <= stageNumber);
+  const allCases: (typeof stageTestCases.$inferSelect)[] = [];
+  for (const stage of relevantStages) {
+    const cases = await db.select().from(stageTestCases)
+      .where(eq(stageTestCases.stageId, stage.id))
+      .orderBy(stageTestCases.orderIndex);
+    allCases.push(...cases);
+  }
+  return allCases;
+}
+
+// ── Seeding ────────────────────────────────────────────────────────────────
+
 export async function seedProblemIfNotExists(
   problemData: { slug: string; title: string; difficulty: "Easy" | "Medium" | "Hard"; description: string; starterCode: string },
   cases: { description: string; inputData: string; expectedOutput: string; orderIndex: number }[]
@@ -139,4 +182,57 @@ export async function seedProblemIfNotExists(
     await db.insert(testCases).values(cases.map(c => ({ ...c, problemId })));
   }
   console.log(`[Seed] Seeded problem: ${problemData.title}`);
+}
+
+/** Seed a staged problem with its stages and per-stage test cases. Idempotent. */
+export async function seedStagedProblemIfNotExists(
+  problemData: {
+    number?: number;
+    slug: string;
+    title: string;
+    difficulty: "Easy" | "Medium" | "Hard";
+    description: string;
+    starterCode: string;
+    tags?: string;
+    methodName?: string;
+  },
+  stages: Array<{
+    stageNumber: number;
+    title: string;
+    description: string;
+    baseClass: string;
+    starterCode: string;
+    solution?: string;
+    solutionExplanation?: string;
+    testCases: Array<{ description: string; inputData: string; expectedOutput: string; orderIndex: number }>;
+  }>
+) {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await getProblemBySlug(problemData.slug);
+  if (existing) return;
+  const [result] = await db.insert(problems).values({
+    ...problemData,
+    isStaged: 1,
+  }).$returningId();
+  const problemId = result.id;
+  for (const stage of stages) {
+    const [stageResult] = await db.insert(problemStages).values({
+      problemId,
+      stageNumber: stage.stageNumber,
+      title: stage.title,
+      description: stage.description,
+      baseClass: stage.baseClass,
+      starterCode: stage.starterCode,
+      solution: stage.solution ?? null,
+      solutionExplanation: stage.solutionExplanation ?? null,
+    }).$returningId();
+    const stageId = stageResult.id;
+    if (stage.testCases.length > 0) {
+      await db.insert(stageTestCases).values(
+        stage.testCases.map(tc => ({ ...tc, stageId, problemId }))
+      );
+    }
+  }
+  console.log(`[Seed] Seeded staged problem: ${problemData.title} (${stages.length} stages)`);
 }

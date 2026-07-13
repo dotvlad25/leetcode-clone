@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 import { relations } from "drizzle-orm";
 
 /**
@@ -28,7 +28,32 @@ export const problems = mysqlTable("problems", {
   solutionExplanation: text("solutionExplanation"),
   solutionVariants: text("solutionVariants"),
   methodName: varchar("methodName", { length: 64 }).default("findDuplicate").notNull(),
+  tags: text("tags"),
+  isStaged: int("isStaged").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const problemStages = mysqlTable("problem_stages", {
+  id: int("id").autoincrement().primaryKey(),
+  problemId: int("problemId").notNull(),
+  stageNumber: int("stageNumber").notNull(),
+  title: varchar("title", { length: 256 }).notNull(),
+  description: text("description").notNull(),
+  baseClass: text("baseClass").notNull(),
+  starterCode: text("starterCode").notNull(),
+  solution: text("solution"),
+  solutionExplanation: text("solutionExplanation"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const stageTestCases = mysqlTable("stage_test_cases", {
+  id: int("id").autoincrement().primaryKey(),
+  stageId: int("stageId").notNull(),
+  problemId: int("problemId").notNull(),
+  description: varchar("description", { length: 512 }).notNull(),
+  inputData: text("inputData").notNull(),
+  expectedOutput: text("expectedOutput").notNull(),
+  orderIndex: int("orderIndex").notNull().default(0),
 });
 
 export const testCases = mysqlTable("test_cases", {
@@ -62,6 +87,17 @@ export type InsertSubmission = typeof submissions.$inferInsert;
 export const problemsRelations = relations(problems, ({ many }) => ({
   testCases: many(testCases),
   submissions: many(submissions),
+  stages: many(problemStages),
+}));
+
+export const problemStagesRelations = relations(problemStages, ({ one, many }) => ({
+  problem: one(problems, { fields: [problemStages.problemId], references: [problems.id] }),
+  testCases: many(stageTestCases),
+}));
+
+export const stageTestCasesRelations = relations(stageTestCases, ({ one }) => ({
+  stage: one(problemStages, { fields: [stageTestCases.stageId], references: [problemStages.id] }),
+  problem: one(problems, { fields: [stageTestCases.problemId], references: [problems.id] }),
 }));
 
 export const testCasesRelations = relations(testCases, ({ one }) => ({
@@ -72,3 +108,7 @@ export const submissionsRelations = relations(submissions, ({ one }) => ({
   user: one(users, { fields: [submissions.userId], references: [users.id] }),
   problem: one(problems, { fields: [submissions.problemId], references: [problems.id] }),
 }));
+export type ProblemStage = typeof problemStages.$inferSelect;
+export type InsertProblemStage = typeof problemStages.$inferInsert;
+export type StageTestCase = typeof stageTestCases.$inferSelect;
+export type InsertStageTestCase = typeof stageTestCases.$inferInsert;

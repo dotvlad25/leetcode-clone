@@ -59,3 +59,20 @@
 ## Pending Features
 - [x] Add solution variant dropdown for LC146 (OrderedDict vs manual DLL)
 - [x] Add Reset to Starter Code button in editor toolbar
+
+## Staged Problem System (NEW)
+- [x] Add problem_stages table (problemId, stageNumber, title, description, baseClass, starterCode, solution, solutionExplanation)
+- [x] Add stage_test_cases table (stageId, description, inputData, expectedOutput, orderIndex)
+- [x] Add tags column to problems table
+- [x] Update executor to support staged execution (cumulative tests)
+- [x] Update problems router: getBySlug returns stages, runStage/submitStage procedures
+- [x] Update frontend ProblemDetail.tsx: stage selector, read-only base class panel, cumulative tests
+- [x] Update Problems list to show staged badge on staged problems
+- [x] Seed Rate Limiter (3 stages)
+- [x] Seed Duplicate File Finder (2 stages)
+- [x] Seed Stack Trace Profiler (2 stages — Basic Trace Events + Denoising Filter per spec)
+- [x] Seed Greedy Tokenizer (2 stages)
+- [x] Seed Count Smaller to the Right (2 stages)
+- [x] Seed In-Memory Database (4 stages)
+- [x] Seed Bank System (4 stages)
+- [x] Seed LRU Cache + Task Manager (3 stages)

@@ -304,6 +304,45 @@ except Exception as e:
 `.trim();
 }
 
+/**
+ * Staged problem test script builder.
+ * For staged problems, userCode is just the implementation class.
+ * baseClass is the abstract base that is prepended.
+ * Each test case is a standalone Python snippet that prints a result.
+ */
+export function buildStagedTestScript(
+  baseClass: string,
+  userCode: string,
+  inputData: string,
+  expectedOutput: string
+): string {
+  return `
+import json, sys, traceback
+
+${baseClass}
+
+${userCode}
+
+try:
+    input_lines = ${JSON.stringify(inputData)}
+    expected_raw = ${JSON.stringify(expectedOutput)}
+    expected = expected_raw.strip()
+    # Execute the input as a script and capture stdout
+    import io
+    from contextlib import redirect_stdout
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        exec(input_lines, {"__builtins__": __builtins__})
+    actual = buf.getvalue().strip()
+    if actual == expected:
+        print(json.dumps({"passed": True, "actual": actual}))
+    else:
+        print(json.dumps({"passed": False, "actual": actual, "expected": expected}))
+except Exception as e:
+    print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
+`.trim();
+}
+
 // Legacy: kept for backward compatibility with any direct callers
 export function buildTestScript(
   userCode: string,

@@ -68,3 +68,5 @@ async function startServer() {
 }
 
 startServer().catch(console.error);
+import { runStagedSeed } from "../seed-staged";
+  runStagedSeed().catch(console.error);

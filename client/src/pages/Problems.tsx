@@ -63,12 +63,17 @@ export default function Problems() {
                         <Circle className="w-4 h-4 text-muted-foreground/40" />
                       )}
                     </div>
-                   <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">{p.number > 0 ? p.number : idx + 1}.</span>
-                      <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                        {p.title}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                     <span className="text-sm text-muted-foreground">{p.number > 0 ? p.number : idx + 1}.</span>
+                     <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                       {p.title}
+                     </span>
+                     {p.isStaged ? (
+                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-blue-500/40 text-blue-400 bg-blue-500/10 leading-none">
+                         STAGED
+                       </span>
+                     ) : null}
+                   </div>
                     <div className="flex items-center">
                       <DifficultyBadge difficulty={p.difficulty} />
                     </div>

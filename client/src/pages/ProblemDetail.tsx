@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useParams, Link } from "wouter";
 import Editor from "@monaco-editor/react";
 import { trpc } from "@/lib/trpc";
@@ -24,6 +24,7 @@ import {
   Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb, Save,
 } from "lucide-react";
 import { RotateCcw } from "lucide-react";
+import { Layers, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -333,6 +334,16 @@ export default function ProblemDetail() {
   const [code, setCode] = useState<string>("");
   const [editorTab, setEditorTab] = useState<"solution" | "tests">("solution");
 
+  // ── Staged problem state ─────────────────────────────────────────────────────
+  const isStaged = !!(problem?.isStaged);
+  type StageData = { id: number; stageNumber: number; title: string; description: string; baseClass: string; starterCode: string; solution: string | null; solutionExplanation: string | null; };
+  const stages = (problem as any)?.stages as StageData[] | null;
+  const [currentStageNumber, setCurrentStageNumber] = useState(1);
+  const currentStage = stages?.find(s => s.stageNumber === currentStageNumber) ?? null;
+  useEffect(() => {
+    if (stages && stages.length > 0) setCurrentStageNumber(1);
+  }, [problem?.id]);
+
   // ── localStorage draft persistence ──────────────────────────────────────────
   const draftKey = `pycode-draft-${slug}`;
 
@@ -345,7 +356,7 @@ export default function ProblemDetail() {
     } else {
       setCode(problem.starterCode);
     }
-  }, [problem?.id]);  // only run when the problem changes (not on every re-render)
+  }, [problem?.id, currentStageNumber]);  // reload when stage changes
 
   // Auto-save draft whenever code changes (debounced 500ms)
   useEffect(() => {
@@ -356,6 +367,13 @@ export default function ProblemDetail() {
     }, 500);
     return () => clearTimeout(timer);
   }, [code, draftKey]);
+
+  // ── Stage-aware display helpers ──────────────────────────────────────────────
+  const displayDescription = isStaged && currentStage ? currentStage.description : problem?.description ?? "";
+  const stagedUnitTestCode = useMemo(() => {
+    if (!isStaged || !currentStage) return null;
+    return `# Stage ${currentStageNumber}: ${currentStage.title}\n# Tests are run cumulatively (all stages 1..${currentStageNumber})\n# Click Run to execute against your implementation\n`;
+  }, [isStaged, currentStageNumber, currentStage]);
 
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [selectedVariantKey, setSelectedVariantKey] = useState<string>("default");
@@ -387,6 +405,27 @@ export default function ProblemDetail() {
     },
     [problem, code]
   );
+
+  const runStageMutation = trpc.problems.runStageTests.useMutation({
+    onSuccess: (data) => {
+      setTestResults(data.results);
+      setTerminalOutput(data.terminalOutput);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
+      const passed = data.results.filter((r) => r.passed).length;
+      const total = data.results.length;
+      if (passed === total) toast.success(`All ${total} tests passed!`);
+      else toast.error(`${passed}/${total} tests passed`);
+    },
+    onError: (err) => {
+      setTerminalOutput(`\u274c Execution error:\n${err.message}`);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
+      toast.error(`Execution error: ${err.message}`);
+    },
+  });
 
   const runMutation = trpc.problems.runTests.useMutation({
     onSuccess: (data) => {
@@ -446,7 +485,7 @@ export default function ProblemDetail() {
   });
 
   const currentCode = code || problem?.starterCode || "";
-  const isRunning = runMutation.isPending || submitMutation.isPending;
+  const isRunning = runMutation.isPending || submitMutation.isPending || runStageMutation.isPending;
   const isAnalyzing = analyzeMutation.isPending;
 
   // Parse solution variants (JSON stored as text column)
@@ -467,14 +506,22 @@ export default function ProblemDetail() {
   const handleRun = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
-    runMutation.mutate({ slug, code: currentCode });
+    if (isStaged) {
+      runStageMutation.mutate({ slug, code: currentCode, stageNumber: currentStageNumber });
+    } else {
+      runMutation.mutate({ slug, code: currentCode });
+    }
   };
 
   const handleSubmit = () => {
     if (!isAuthenticated) { startLogin(); return; }
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
-    submitMutation.mutate({ slug, code: currentCode });
+    if (isStaged) {
+      runStageMutation.mutate({ slug, code: currentCode, stageNumber: currentStageNumber });
+    } else {
+      submitMutation.mutate({ slug, code: currentCode });
+    }
   };
 
   const handleAnalyze = () => {
@@ -556,10 +603,39 @@ export default function ProblemDetail() {
                 </button>
               </div>
               {/* Content area */}
+              {/* Stage selector strip — only for staged problems */}
+              {isStaged && stages && (
+                <div className="shrink-0 flex items-center gap-1 border-b border-[#2d2d2d] bg-[#161616] px-3 py-1.5 overflow-x-auto">
+                  <Layers className="w-3.5 h-3.5 text-muted-foreground shrink-0 mr-1" />
+                  {stages.map((stage, idx) => (
+                    <div key={stage.id} className="flex items-center gap-1 shrink-0">
+                      {idx > 0 && <ChevronRight className="w-3 h-3 text-[#444]" />}
+                      <button
+                        onClick={() => setCurrentStageNumber(stage.stageNumber)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          currentStageNumber === stage.stageNumber
+                            ? "bg-primary/20 text-primary border border-primary/30"
+                            : "text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d]"
+                        }`}
+                      >
+                        Stage {stage.stageNumber}: {stage.title}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex-1 overflow-y-auto overflow-x-hidden p-5">
                 {leftTab === "instructions" ? (
                   <div className="prose prose-sm prose-invert max-w-none">
-                    <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{problem.description}</Streamdown>
+                    {isStaged && currentStage && (
+                      <div className="mb-4 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">
+                          Stage {currentStageNumber}: {currentStage.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground">(cumulative — all previous stage tests also run)</span>
+                      </div>
+                    )}
+                    <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{displayDescription}</Streamdown>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -715,42 +791,106 @@ export default function ProblemDetail() {
                     </div>
                   </div>
 
-                  {/* Monaco editor */}
-                  <div className="flex-1 overflow-hidden">
-                    {/* Both editors are always mounted; CSS display swap prevents re-mount on tab switch */}
-                    <div style={{ display: editorTab === "solution" ? "block" : "none" }} className="h-full">
-                      <Editor
-                        height="100%"
-                        defaultLanguage="python"
-                        language="python"
-                        value={currentCode}
-                        onChange={(val) => setCode(val ?? "")}
-                        onMount={handleEditorMount}
-                        theme="vs-dark"
-                        options={{
-                          fontSize: 14,
-                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                          fontLigatures: true,
-                          minimap: { enabled: false },
-                          scrollBeyondLastLine: false,
-                          lineNumbers: "on",
-                          renderLineHighlight: "line",
-                          tabSize: 4,
-                          insertSpaces: true,
-                          wordWrap: "on",
-                          padding: { top: 12, bottom: 12 },
-                          smoothScrolling: true,
-                          cursorBlinking: "smooth",
-                          bracketPairColorization: { enabled: true },
-                        }}
-                      />
+                 {/* Monaco editor */}
+                 <div className="flex-1 overflow-hidden">
+                   {/* Both editors are always mounted; CSS display swap prevents re-mount on tab switch */}
+                   <div style={{ display: editorTab === "solution" ? "block" : "none" }} className="h-full">
+                      {isStaged && currentStage ? (
+                        <ResizablePanelGroup direction="vertical" className="h-full">
+                          <ResizablePanel defaultSize={35} minSize={15} maxSize={60}>
+                            <div className="h-full flex flex-col bg-[#161616]">
+                              <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-[#2d2d2d] bg-[#1a1a1a]">
+                                <Code2 className="w-3 h-3 text-[#888]" />
+                                <span className="text-[11px] text-[#888] font-mono">base_class.py</span>
+                                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-[#2d2d2d] text-[#666]">read-only</span>
+                              </div>
+                              <div className="flex-1 overflow-hidden">
+                                <Editor
+                                  height="100%"
+                                  defaultLanguage="python"
+                                  language="python"
+                                  value={currentStage.baseClass}
+                                  theme="vs-dark"
+                                  options={{
+                                    fontSize: 12,
+                                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                                    minimap: { enabled: false },
+                                    scrollBeyondLastLine: false,
+                                    lineNumbers: "on",
+                                    readOnly: true,
+                                    domReadOnly: true,
+                                    wordWrap: "on",
+                                    padding: { top: 8, bottom: 8 },
+                                    scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
+                                    renderLineHighlight: "none",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </ResizablePanel>
+                          <ResizableHandle withHandle className="bg-[#2d2d2d] hover:bg-primary/40 transition-colors" />
+                          <ResizablePanel defaultSize={65} minSize={30}>
+                            <Editor
+                              height="100%"
+                              defaultLanguage="python"
+                              language="python"
+                              value={currentCode}
+                              onChange={(val) => setCode(val ?? "")}
+                              onMount={handleEditorMount}
+                              theme="vs-dark"
+                              options={{
+                                fontSize: 14,
+                                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                                fontLigatures: true,
+                                minimap: { enabled: false },
+                                scrollBeyondLastLine: false,
+                                lineNumbers: "on",
+                                renderLineHighlight: "line",
+                                tabSize: 4,
+                                insertSpaces: true,
+                                wordWrap: "on",
+                                padding: { top: 12, bottom: 12 },
+                                smoothScrolling: true,
+                                cursorBlinking: "smooth",
+                                bracketPairColorization: { enabled: true },
+                              }}
+                            />
+                          </ResizablePanel>
+                        </ResizablePanelGroup>
+                      ) : (
+                        <Editor
+                          height="100%"
+                          defaultLanguage="python"
+                          language="python"
+                          value={currentCode}
+                          onChange={(val) => setCode(val ?? "")}
+                          onMount={handleEditorMount}
+                          theme="vs-dark"
+                          options={{
+                            fontSize: 14,
+                            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                            fontLigatures: true,
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            lineNumbers: "on",
+                            renderLineHighlight: "line",
+                            tabSize: 4,
+                            insertSpaces: true,
+                            wordWrap: "on",
+                            padding: { top: 12, bottom: 12 },
+                            smoothScrolling: true,
+                            cursorBlinking: "smooth",
+                            bracketPairColorization: { enabled: true },
+                          }}
+                        />
+                      )}
                     </div>
                     <div style={{ display: editorTab === "tests" ? "block" : "none" }} className="h-full">
                       <Editor
                         height="100%"
                         defaultLanguage="python"
                         language="python"
-                        value={problem.unitTestCode ?? "# Unit tests not available"}
+                        value={isStaged ? (stagedUnitTestCode ?? "# Stage tests") : (problem.unitTestCode ?? "# Unit tests not available")}
                         theme="vs-dark"
                         options={{
                           fontSize: 13,
@@ -890,10 +1030,11 @@ export default function ProblemDetail() {
             <AlertDialogCancel className="bg-transparent border-[#3a3a3a] text-foreground hover:bg-[#2d2d2d]">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction
+             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => {
-                if (problem?.starterCode) setCode(problem.starterCode);
+                const resetCode = isStaged && currentStage ? currentStage.starterCode : problem?.starterCode;
+                if (resetCode) setCode(resetCode);
                 localStorage.removeItem(draftKey);
                 setShowResetConfirm(false);
                 toast.success("Code reset to starter template");

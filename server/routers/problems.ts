@@ -7,8 +7,11 @@ import {
   createSubmission,
   getSubmissionsForUser,
   getAcceptedProblemIds,
+  getStagesForProblem,
+  getTestCasesForStage,
+  getCumulativeTestCasesForStage,
 } from "../db";
-import { executePython, buildGenericTestScript, buildUnitTestCode, TestCaseResult } from "../executor";
+import { executePython, buildGenericTestScript, buildUnitTestCode, buildStagedTestScript, TestCaseResult } from "../executor";
 import { invokeLLM } from "../_core/llm";
 
 export const problemsRouter = router({
@@ -43,7 +46,12 @@ export const problemsRouter = router({
         })),
         problem.slug
       );
-      return { ...problem, testCases: cases, unitTestCode };
+      // For staged problems, also load stages
+      let stages = null;
+      if (problem.isStaged) {
+        stages = await getStagesForProblem(problem.id);
+      }
+      return { ...problem, testCases: cases, unitTestCode, stages };
     }),
 
   // Run code against all test cases (does not save submission)
@@ -304,6 +312,104 @@ Provide a thorough code review.`;
 
       const content = response.choices[0].message.content;
       return JSON.parse(content as string);
+    }),
+
+  // Get test cases for a specific stage (for the read-only test viewer)
+  getStageTestCases: publicProcedure
+    .input(z.object({ slug: z.string(), stageNumber: z.number() }))
+    .query(async ({ input }) => {
+      const problem = await getProblemBySlug(input.slug);
+      if (!problem) return { stageCases: [], cumulativeCases: [] };
+      const stages = await getStagesForProblem(problem.id);
+      const stage = stages.find(s => s.stageNumber === input.stageNumber);
+      if (!stage) return { stageCases: [], cumulativeCases: [] };
+      const stageCases = await getTestCasesForStage(stage.id);
+      const cumulativeCases = await getCumulativeTestCasesForStage(problem.id, input.stageNumber);
+      return { stageCases, cumulativeCases, stage };
+    }),
+
+  // Run tests for a staged problem (cumulative — all stages up to stageNumber)
+  runStageTests: publicProcedure
+    .input(z.object({
+      slug: z.string(),
+      code: z.string().max(50000),
+      stageNumber: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const problem = await getProblemBySlug(input.slug);
+      if (!problem) throw new Error("Problem not found");
+      const stages = await getStagesForProblem(problem.id);
+      const currentStage = stages.find(s => s.stageNumber === input.stageNumber);
+      if (!currentStage) throw new Error("Stage not found");
+
+      // Cumulative test cases (all stages up to and including current)
+      const cases = await getCumulativeTestCasesForStage(problem.id, input.stageNumber);
+
+      const results: TestCaseResult[] = [];
+      const terminalLines: string[] = [];
+
+      for (const tc of cases) {
+        const script = buildStagedTestScript(
+          currentStage.baseClass,
+          input.code,
+          tc.inputData,
+          tc.expectedOutput
+        );
+        const exec = await executePython(script);
+        if (exec.stderr && exec.stderr.trim()) {
+          terminalLines.push(`--- stderr (case ${tc.orderIndex + 1}) ---`);
+          terminalLines.push(exec.stderr.trim());
+        }
+        if (exec.timedOut) {
+          results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)", stdout: "", stderr: "TLE" });
+          terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description} — Time Limit Exceeded`);
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(exec.stdout || "{}");
+          const r: TestCaseResult = {
+            id: tc.id,
+            description: tc.description,
+            passed: parsed.passed === true,
+            expected: tc.expectedOutput,
+            actual: parsed.actual !== undefined ? String(parsed.actual) : exec.stdout,
+            error: parsed.error,
+            stdout: exec.stdout,
+            stderr: exec.stderr,
+          };
+          results.push(r);
+          const icon = r.passed ? "✅" : "❌";
+          terminalLines.push(`${icon} Case ${tc.orderIndex + 1}: ${tc.description}`);
+          if (!r.passed) {
+            terminalLines.push(`   Expected: ${tc.expectedOutput}`);
+            terminalLines.push(`   Got:      ${r.actual}`);
+            if (r.error) terminalLines.push(`   Error:\n${r.error.split("\n").map((l: string) => "   " + l).join("\n")}`);
+          }
+        } catch {
+          const r: TestCaseResult = {
+            id: tc.id,
+            description: tc.description,
+            passed: false,
+            expected: tc.expectedOutput,
+            actual: exec.stdout,
+            error: exec.stderr || "Failed to parse output",
+            stdout: exec.stdout,
+            stderr: exec.stderr,
+          };
+          results.push(r);
+          terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description}`);
+          if (exec.stdout && exec.stdout.trim()) {
+            terminalLines.push(`   stdout: ${exec.stdout.trim()}`);
+          }
+          terminalLines.push(`   ${exec.stderr?.trim() || "Failed to parse output"}`);
+        }
+      }
+      const passed = results.filter((r) => r.passed).length;
+      const total = results.length;
+      const summary = passed === total
+        ? `\n✅ All ${total} test cases passed!`
+        : `\n❌ ${passed}/${total} test cases passed`;
+      return { results, terminalOutput: terminalLines.join("\n") + summary };
     }),
 
   // Get submission history for a user on a problem
