@@ -143,3 +143,12 @@
   font-family: "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace !important;
   font-feature-settings: "liga" 1, "calt" 1;
 }
+
+/* ── File Tab Bar — hide scrollbar while keeping scroll behaviour ─────────── */
+.tab-scroll-area {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge legacy */
+}
+.tab-scroll-area::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / new Edge */
+}

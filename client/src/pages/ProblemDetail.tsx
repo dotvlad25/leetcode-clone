@@ -434,16 +434,20 @@ export default function ProblemDetail() {
   const isCurrentStageLocked = isStaged && currentStageNumber > highestUnlockedStage;
 
   // ── localStorage draft persistence ──────────────────────────────────────────
-  const draftKey = `pycode-draft-${slug}`;
+  // Draft key is per-stage for staged problems so each stage preserves its own draft independently
+  const draftKey = isStaged
+    ? `pycode-draft-${slug}-stage-${currentStageNumber}`
+    : `pycode-draft-${slug}`;
 
-  // Load saved draft on first problem load
+  // Load saved draft on first problem load or when stage changes
   useEffect(() => {
     if (!problem) return;
     const saved = localStorage.getItem(draftKey);
     if (saved !== null) {
       setCode(saved);
     } else {
-      setCode(problem.starterCode);
+      // For staged problems fall back to the stage-specific starter code
+      setCode(isStaged && currentStage ? currentStage.starterCode : problem.starterCode);
     }
   }, [problem?.id, currentStageNumber]);  // reload when stage changes
 
@@ -751,13 +755,26 @@ export default function ProblemDetail() {
               {/* Content area */}
               {/* Stage selector strip — only for staged problems */}
               {isStaged && stages && (
-                <div className="shrink-0 flex items-center gap-1 border-b border-[#2d2d2d] bg-[#161616] px-3 py-1.5 overflow-x-auto">
+                <div className="shrink-0 flex items-center gap-1 border-b border-[#2d2d2d] bg-[#161616] px-3 py-1.5 overflow-x-auto tab-scroll-area">
                   <Layers className="w-3.5 h-3.5 text-muted-foreground shrink-0 mr-1" />
                   {stages.map((stage, idx) => (
                     <div key={stage.id} className="flex items-center gap-1 shrink-0">
                       {idx > 0 && <ChevronRight className="w-3 h-3 text-[#444]" />}
                       <button
-                        onClick={() => setCurrentStageNumber(stage.stageNumber)}
+                        onClick={() => {
+                          if (stage.stageNumber !== currentStageNumber) {
+                            // Flush the current stage draft before switching
+                            const leavingKey = isStaged
+                              ? `pycode-draft-${slug}-stage-${currentStageNumber}`
+                              : `pycode-draft-${slug}`;
+                            localStorage.setItem(leavingKey, currentCode);
+                            toast.success("Draft saved", {
+                              description: `Stage ${currentStageNumber} draft saved`,
+                              duration: 2200,
+                            });
+                          }
+                          setCurrentStageNumber(stage.stageNumber);
+                        }}
                         className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                           currentStageNumber === stage.stageNumber
                             ? "bg-primary/20 text-primary border border-primary/30"
@@ -869,73 +886,85 @@ export default function ProblemDetail() {
               <ResizablePanel defaultSize={65} minSize={15}>
                 <div className="h-full flex flex-col bg-[#1e1e1e] overflow-hidden">
                   {/* Editor tab bar — file-tab switcher (CodeSignal style) */}
-                  <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1 overflow-x-auto">
+                  {/* Editor tab bar — file-tab switcher (CodeSignal style) */}
+                  {/* Fixed left anchor: back chevron + separator */}
+                  <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0">
                     <Link href="/problems">
                       <button className="flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0">
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
                     </Link>
                     <div className="w-px h-4 bg-[#3a3a3a] mx-1 shrink-0" />
-                    {/* solution.py — always present */}
-                    <button
-                      onClick={() => setFileTab("solution")}
-                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
-                        fileTab === "solution"
-                          ? "border-primary text-foreground"
-                          : "border-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <Code2 className="w-3.5 h-3.5" />
-                      solution.py
-                    </button>
-                    {/* base_class.py — staged problems only */}
-                    {isStaged && currentStage && (
-                      <button
-                        onClick={() => setFileTab("base_class")}
-                        className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
-                          fileTab === "base_class"
-                            ? "border-amber-400/80 text-amber-300"
-                            : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <FileCode2 className="w-3.5 h-3.5" />
-                        base_class.py
-                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[#2d2d2d] text-[#888]">read-only</span>
-                      </button>
-                    )}
-                    {/* test_level_N.py — one tab per stage (cumulative), staged problems only */}
-                    {isStaged && stages && stages.map((s) => (
-                      <button
-                        key={`test_level_${s.stageNumber}`}
-                        onClick={() => setFileTab(`test_level_${s.stageNumber}`)}
-                        className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
-                          fileTab === `test_level_${s.stageNumber}`
-                            ? "border-emerald-400/80 text-emerald-300"
-                            : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <FlaskConical className="w-3.5 h-3.5" />
-                        test_level_{s.stageNumber}.py
-                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[#2d2d2d] text-[#888]">read-only</span>
-                      </button>
-                    ))}
-                    {/* test_cases.py — non-staged problems only */}
-                    {!isStaged && (
-                      <button
-                        onClick={() => setFileTab("tests")}
-                        className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
-                          fileTab === "tests"
-                            ? "border-primary text-foreground"
-                            : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <FlaskConical className="w-3.5 h-3.5" />
-                        test_cases.py
-                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
-                      </button>
-                    )}
-                    {/* Action buttons */}
-                    <div className="ml-auto flex items-center gap-1 pr-2">
+                    {/* Scrollable tab list with fade indicators */}
+                    <div className="relative flex-1 min-w-0">
+                      {/* Left fade — masks overflow on left side */}
+                      <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-[#252526] to-transparent z-10" />
+                      {/* Scrollable inner row */}
+                      <div className="flex items-center overflow-x-auto tab-scroll-area">
+                        {/* solution.py — always present */}
+                        <button
+                          onClick={() => setFileTab("solution")}
+                          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                            fileTab === "solution"
+                              ? "border-primary text-foreground"
+                              : "border-transparent text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <Code2 className="w-3.5 h-3.5" />
+                          solution.py
+                        </button>
+                        {/* base_class.py — staged problems only */}
+                        {isStaged && currentStage && (
+                          <button
+                            onClick={() => setFileTab("base_class")}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                              fileTab === "base_class"
+                                ? "border-amber-400/80 text-amber-300"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            <FileCode2 className="w-3.5 h-3.5" />
+                            base_class.py
+                            <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[#2d2d2d] text-[#888]">read-only</span>
+                          </button>
+                        )}
+                        {/* test_level_N.py — one tab per stage (cumulative), staged problems only */}
+                        {isStaged && stages && stages.map((s) => (
+                          <button
+                            key={`test_level_${s.stageNumber}`}
+                            onClick={() => setFileTab(`test_level_${s.stageNumber}`)}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                              fileTab === `test_level_${s.stageNumber}`
+                                ? "border-emerald-400/80 text-emerald-300"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            <FlaskConical className="w-3.5 h-3.5" />
+                            test_level_{s.stageNumber}.py
+                            <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[#2d2d2d] text-[#888]">read-only</span>
+                          </button>
+                        ))}
+                        {/* test_cases.py — non-staged problems only */}
+                        {!isStaged && (
+                          <button
+                            onClick={() => setFileTab("tests")}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                              fileTab === "tests"
+                                ? "border-primary text-foreground"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            <FlaskConical className="w-3.5 h-3.5" />
+                            test_cases.py
+                            <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
+                          </button>
+                        )}
+                      </div>
+                      {/* Right fade — masks overflow on right side */}
+                      <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[#252526] to-transparent z-10" />
+                    </div>
+                    {/* Action buttons — always pinned to the right, never scrolled */}
+                    <div className="shrink-0 flex items-center gap-1 pr-2 pl-1">
                       {lastSavedAt && editorTab === "solution" && (
                         <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60 mr-2 select-none">
                           <Save className="w-2.5 h-2.5" />

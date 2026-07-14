@@ -94,3 +94,7 @@
 - [x] Ensure testFileContent is stored per stage and returned by getBySlug
 - [x] Add generateTestFileContent helper to seed-staged.ts (durable for fresh installs)
 - [x] Add backfillTestFileContent post-seed function to populate null rows on startup
+
+## UX Polish (NEW)
+- [x] Scrollable file-tab bar with fade indicators for 4-stage problems (no overflow)
+- [x] Stage-switch draft-saved tooltip/toast when switching between stages
