@@ -948,84 +948,46 @@ export default function ProblemDetail() {
                        }}
                      />
                    </div>
-                   {/* base_class.py — read-only, staged problems only */}
-                   {isStaged && currentStage && (
-                     <div style={{ display: fileTab === "base_class" ? "flex" : "none" }} className="h-full flex-col">
-                       <Editor
-                         height="100%"
-                         defaultLanguage="python"
-                         language="python"
-                         value={currentStage.baseClass}
-                         theme="vs-dark"
-                         options={{
-                           fontSize: 13,
-                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                           minimap: { enabled: false },
-                           scrollBeyondLastLine: false,
-                           lineNumbers: "on",
-                           readOnly: true,
-                           domReadOnly: true,
-                           wordWrap: "on",
-                           padding: { top: 12, bottom: 12 },
-                           renderLineHighlight: "none",
-                           scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
-                         }}
-                       />
-                     </div>
-                   )}
-                   {/* test_level_N.py — read-only, one per stage, staged problems only */}
-                   {isStaged && stages && stages.map((s) => (
-                     <div key={`test_level_editor_${s.stageNumber}`}
-                          style={{ display: fileTab === `test_level_${s.stageNumber}` ? "flex" : "none" }}
-                          className="h-full flex-col">
-                       <Editor
-                         height="100%"
-                         defaultLanguage="python"
-                         language="python"
-                         value={s.testFileContent ?? `# Tests for Stage ${s.stageNumber}: ${s.title}
-# (Test content not available)`}
-                         theme="vs-dark"
-                         options={{
-                           fontSize: 13,
-                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                           minimap: { enabled: false },
-                           scrollBeyondLastLine: false,
-                           lineNumbers: "on",
-                           readOnly: true,
-                           domReadOnly: true,
-                           wordWrap: "on",
-                           padding: { top: 12, bottom: 12 },
-                           renderLineHighlight: "none",
-                           scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
-                         }}
-                       />
-                     </div>
-                   ))}
-                   {/* test_cases.py — read-only, non-staged problems only */}
-                   {!isStaged && (
-                     <div style={{ display: fileTab === "tests" ? "flex" : "none" }} className="h-full flex-col">
-                       <Editor
-                         height="100%"
-                         defaultLanguage="python"
-                         language="python"
-                         value={problem.unitTestCode ?? "# Unit tests not available"}
-                         theme="vs-dark"
-                         options={{
-                           fontSize: 13,
-                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                           minimap: { enabled: false },
-                           scrollBeyondLastLine: false,
-                           lineNumbers: "on",
-                           readOnly: true,
-                           domReadOnly: true,
-                           wordWrap: "on",
-                           padding: { top: 12, bottom: 12 },
-                           renderLineHighlight: "none",
-                           scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
-                         }}
-                       />
-                     </div>
-                   )}
+                   {/* Read-only viewer: base_class.py / test_level_N.py / test_cases.py */}
+                   {fileTab !== "solution" && (() => {
+                     // Compute the content and key for the single read-only editor
+                     let readOnlyContent = "";
+                     let readOnlyKey = fileTab;
+                     if (fileTab === "base_class" && isStaged && currentStage) {
+                       readOnlyContent = currentStage.baseClass;
+                     } else if (fileTab.startsWith("test_level_") && isStaged && stages) {
+                       const stageNum = parseInt(fileTab.replace("test_level_", ""), 10);
+                       const targetStage = stages.find(s => s.stageNumber === stageNum);
+                       readOnlyContent = targetStage?.testFileContent ?? `# Tests for Stage ${stageNum}\n# (Test content not available)`;
+                     } else if (fileTab === "tests" && !isStaged) {
+                       readOnlyContent = problem.unitTestCode ?? "# Unit tests not available";
+                     }
+                     return (
+                       <div key={readOnlyKey} className="h-full flex-col" style={{ display: "flex" }}>
+                         <Editor
+                           key={readOnlyKey}
+                           height="100%"
+                           defaultLanguage="python"
+                           language="python"
+                           value={readOnlyContent}
+                           theme="vs-dark"
+                           options={{
+                             fontSize: 13,
+                             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                             minimap: { enabled: false },
+                             scrollBeyondLastLine: false,
+                             lineNumbers: "on",
+                             readOnly: true,
+                             domReadOnly: true,
+                             wordWrap: "on",
+                             padding: { top: 12, bottom: 12 },
+                             renderLineHighlight: "none",
+                             scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
+                           }}
+                         />
+                       </div>
+                     );
+                   })()}
                  </div>
 
                   {/* Always-visible bottom tab strip
