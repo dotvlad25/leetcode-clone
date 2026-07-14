@@ -468,6 +468,18 @@ export default function ProblemDetail() {
     },
     []
   );
+  // Wait for JetBrains Mono to be available, then force Monaco to remeasure.
+  // This handles the case where the editor mounts before the web font is ready.
+  useEffect(() => {
+    const editor = solutionEditorRef.current;
+    const monaco = solutionMonacoRef.current;
+    if (!editor || !monaco) return;
+    document.fonts.ready.then(() => {
+      editor.updateOptions({ fontFamily: "ui-monospace, monospace", fontLigatures: false });
+      monaco.editor.remeasureFonts();
+      editor.layout();
+    });
+  }, []); // runs once after first mount
 
   // Shared onMount for read-only editors — remeasure fonts immediately and after load
   const handleReadOnlyMount = useCallback(
@@ -509,8 +521,8 @@ export default function ProblemDetail() {
     if (!editor || !monaco) return;
     const apply = () => {
       editor.updateOptions({
-        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontLigatures: true,
+        fontFamily: "ui-monospace, monospace",
+        fontLigatures: false,
       });
       editor.layout();
       monaco.editor.remeasureFonts();
@@ -1058,8 +1070,8 @@ export default function ProblemDetail() {
                      theme="vs-dark"
                      options={{
                        fontSize: 14,
-                       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                       fontLigatures: true,
+                       fontFamily: "ui-monospace, monospace",
+                       fontLigatures: false,
                        minimap: { enabled: false },
                        scrollBeyondLastLine: false,
                        lineNumbers: "on",
