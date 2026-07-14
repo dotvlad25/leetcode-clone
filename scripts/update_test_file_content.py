@@ -3,7 +3,8 @@
 Generates human-readable Python unittest files for each staged problem stage
 and updates the testFileContent column in the problem_stages table.
 
-Each stage gets a CUMULATIVE test file: Stage N includes tests from stages 1..N.
+Each stage gets its OWN test file showing only the NEW tests for that stage.
+Cumulative execution (stage 1+2+...+N) still happens at runtime via the executor.
 """
 import mysql.connector
 import re
@@ -22,17 +23,15 @@ def parse_db_url(url):
                 ssl_disabled=False, ssl_verify_cert=False, ssl_verify_identity=False)
 
 def make_test_file(problem_title: str, class_name: str, stages_up_to: list[dict]) -> str:
-    """
-    Build a cumulative Python unittest file for stages_up_to (list of stage dicts).
-    Each stage dict: { stageNumber, title, testCases: [{description, inputData, expectedOutput}] }
-    """
+    """Build a per-stage Python unittest file showing only that stage's own tests."""
     lines = [
         "import unittest",
         "import sys",
         "",
         f"# Test file for: {problem_title}",
-        f"# Cumulative through Stage {stages_up_to[-1]['stageNumber']}: {stages_up_to[-1]['title']}",
-        "# This file shows the tests that will run when you submit.",
+        f"# Stage {stages_up_to[-1]['stageNumber']}: {stages_up_to[-1]['title']}",
+        "# These are the NEW tests introduced in this stage.",
+        "# When you submit, all previous stages' tests also run cumulatively.",
         "# Your solution.py code is injected before these tests at runtime.",
         "",
         "# ─── paste your solution here to run locally ───",
@@ -41,34 +40,35 @@ def make_test_file(problem_title: str, class_name: str, stages_up_to: list[dict]
     ]
 
     test_num = 1
-    for stage in stages_up_to:
-        lines.append(f"# {'─' * 60}")
-        lines.append(f"# Stage {stage['stageNumber']}: {stage['title']}")
-        lines.append(f"# {'─' * 60}")
+    # Only show this stage's own tests (not cumulative)
+    stage = stages_up_to[-1]
+    lines.append(f"# {'─' * 60}")
+    lines.append(f"# Stage {stage['stageNumber']}: {stage['title']}")
+    lines.append(f"# {'─' * 60}")
+    lines.append("")
+    for tc in stage["testCases"]:
+        desc = tc["description"].replace("\n", " ")
+        input_code = tc["inputData"]
+        expected = tc["expectedOutput"]
+        lines.append(f"class Test_Stage{stage['stageNumber']}_Case{test_num}(unittest.TestCase):")
+        lines.append(f'    """')
+        lines.append(f'    {desc}')
+        lines.append(f'    Expected output:')
+        for exp_line in expected.strip().split("\n"):
+            lines.append(f'      {exp_line}')
+        lines.append(f'    """')
+        lines.append(f'    def test(self):')
+        lines.append(f'        import io, contextlib')
+        lines.append(f'        buf = io.StringIO()')
+        lines.append(f'        with contextlib.redirect_stdout(buf):')
+        # Indent the input code
+        for code_line in input_code.split("\n"):
+            lines.append(f'            {code_line}')
+        lines.append(f'        actual = buf.getvalue().strip()')
+        lines.append(f'        expected = {repr(expected.strip())}')
+        lines.append(f'        self.assertEqual(actual, expected)')
         lines.append("")
-        for tc in stage["testCases"]:
-            desc = tc["description"].replace("\n", " ")
-            input_code = tc["inputData"]
-            expected = tc["expectedOutput"]
-            lines.append(f"class Test_Stage{stage['stageNumber']}_Case{test_num}(unittest.TestCase):")
-            lines.append(f'    """')
-            lines.append(f'    {desc}')
-            lines.append(f'    Expected output:')
-            for exp_line in expected.strip().split("\n"):
-                lines.append(f'      {exp_line}')
-            lines.append(f'    """')
-            lines.append(f'    def test(self):')
-            lines.append(f'        import io, contextlib')
-            lines.append(f'        buf = io.StringIO()')
-            lines.append(f'        with contextlib.redirect_stdout(buf):')
-            # Indent the input code
-            for code_line in input_code.split("\n"):
-                lines.append(f'            {code_line}')
-            lines.append(f'        actual = buf.getvalue().strip()')
-            lines.append(f'        expected = {repr(expected.strip())}')
-            lines.append(f'        self.assertEqual(actual, expected)')
-            lines.append("")
-            test_num += 1
+        test_num += 1
 
     lines.append("")
     lines.append("if __name__ == '__main__':")
@@ -108,14 +108,14 @@ def main():
 
         # Generate cumulative test files
         for i, stage in enumerate(stages):
-            cumulative_stages = stages[:i+1]
-            test_content = make_test_file(title, title.replace(" ", ""), cumulative_stages)
+            # Pass only this stage (not cumulative) — display only new tests for this stage
+            test_content = make_test_file(title, title.replace(" ", ""), [stage])
             cur.execute(
                 "UPDATE problem_stages SET testFileContent = %s WHERE id = %s",
                 (test_content, stage["id"])
             )
             print(f"  [{title}] Stage {stage['stageNumber']}: {len(test_content)} chars, "
-                  f"{sum(len(s['testCases']) for s in cumulative_stages)} cumulative tests")
+                  f"{len(stage['testCases'])} tests for this stage")
 
     conn.commit()
     cur.close()

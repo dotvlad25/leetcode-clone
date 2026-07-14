@@ -13,15 +13,15 @@ type StageSeed = {
   testCases: Array<{ description: string; inputData: string; expectedOutput: string; orderIndex: number }>;
 };
 
-function generateTestFileContent(problemTitle: string, cumulativeStages: StageSeed[]): string {
-  const lastStage = cumulativeStages[cumulativeStages.length - 1];
+function generateTestFileContent(problemTitle: string, stage: StageSeed): string {
   const lines: string[] = [
     "import unittest",
     "import sys",
     "",
     `# Test file for: ${problemTitle}`,
-    `# Cumulative through Stage ${lastStage.stageNumber}: ${lastStage.title}`,
-    "# This file shows the tests that will run when you submit.",
+    `# Stage ${stage.stageNumber}: ${stage.title}`,
+    "# These are the NEW tests introduced in this stage.",
+    "# When you submit, all previous stages' tests also run cumulatively.",
     "# Your solution.py code is injected before these tests at runtime.",
     "",
     "# ─── paste your solution here to run locally ───",
@@ -29,34 +29,32 @@ function generateTestFileContent(problemTitle: string, cumulativeStages: StageSe
     "",
   ];
   let testNum = 1;
-  for (const stage of cumulativeStages) {
-    lines.push(`# ${"─".repeat(60)}`);
-    lines.push(`# Stage ${stage.stageNumber}: ${stage.title}`);
-    lines.push(`# ${"─".repeat(60)}`);
-    lines.push("");
-    for (const tc of stage.testCases) {
-      const desc = tc.description.replace(/\n/g, " ");
-      lines.push(`class Test_Stage${stage.stageNumber}_Case${testNum}(unittest.TestCase):`);
-      lines.push(`    """`);
-      lines.push(`    ${desc}`);
-      lines.push(`    Expected output:`);
-      for (const expLine of tc.expectedOutput.trim().split("\n")) {
-        lines.push(`      ${expLine}`);
-      }
-      lines.push(`    """`);
-      lines.push(`    def test(self):`);
-      lines.push(`        import io, contextlib`);
-      lines.push(`        buf = io.StringIO()`);
-      lines.push(`        with contextlib.redirect_stdout(buf):`);
-      for (const codeLine of tc.inputData.split("\n")) {
-        lines.push(`            ${codeLine}`);
-      }
-      lines.push(`        actual = buf.getvalue().strip()`);
-      lines.push(`        expected = ${JSON.stringify(tc.expectedOutput.trim())}`);
-      lines.push(`        self.assertEqual(actual, expected)`);
-      lines.push("");
-      testNum++;
+  lines.push(`# ${"─".repeat(60)}`);
+  lines.push(`# Stage ${stage.stageNumber}: ${stage.title}`);
+  lines.push(`# ${"─".repeat(60)}`);
+  lines.push("");
+  for (const tc of stage.testCases) {
+    const desc = tc.description.replace(/\n/g, " ");
+    lines.push(`class Test_Stage${stage.stageNumber}_Case${testNum}(unittest.TestCase):`);
+    lines.push(`    """`);
+    lines.push(`    ${desc}`);
+    lines.push(`    Expected output:`);
+    for (const expLine of tc.expectedOutput.trim().split("\n")) {
+      lines.push(`      ${expLine}`);
     }
+    lines.push(`    """`);
+    lines.push(`    def test(self):`);
+    lines.push(`        import io, contextlib`);
+    lines.push(`        buf = io.StringIO()`);
+    lines.push(`        with contextlib.redirect_stdout(buf):`);
+    for (const codeLine of tc.inputData.split("\n")) {
+      lines.push(`            ${codeLine}`);
+    }
+    lines.push(`        actual = buf.getvalue().strip()`);
+    lines.push(`        expected = ${JSON.stringify(tc.expectedOutput.trim())}`);
+    lines.push(`        self.assertEqual(actual, expected)`);
+    lines.push("");
+    testNum++;
   }
   lines.push("");
   lines.push("if __name__ == '__main__':");
@@ -79,8 +77,7 @@ async function ensureTestFileContent(
   const [prob] = await db.select({ id: problems.id }).from(problems).where(eq(problems.slug, slug));
   if (!prob) return;
   for (let i = 0; i < stages.length; i++) {
-    const cumulativeStages = stages.slice(0, i + 1);
-    const content = generateTestFileContent(problemTitle, cumulativeStages);
+    const content = generateTestFileContent(problemTitle, stages[i]);
     await db.update(problemStages)
       .set({ testFileContent: content })
       .where(and(
@@ -2644,8 +2641,7 @@ async function backfillTestFileContent(): Promise<void> {
       stagesWithCases.push({ stageNumber: stage.stageNumber, title: stage.title, testCases: cases });
     }
     for (let i = 0; i < stages.length; i++) {
-      if (stages[i].testFileContent) continue;
-      const content = generateTestFileContent(prob.title, stagesWithCases.slice(0, i + 1));
+      const content = generateTestFileContent(prob.title, stagesWithCases[i]);
       await db.update(problemStages)
         .set({ testFileContent: content })
         .where(eq(problemStages.id, stages[i].id));
