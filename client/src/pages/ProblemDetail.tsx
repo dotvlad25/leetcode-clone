@@ -724,6 +724,9 @@ export default function ProblemDetail() {
     : null;
   const displaySolution = activeVariant ? activeVariant.code : problem?.solution ?? null;
   const displayExplanation = activeVariant ? activeVariant.explanation : problem?.solutionExplanation ?? null;
+  // For staged problems, solution lives on the current stage, not the problem
+  const effectiveSolution = isStaged ? (currentStage?.solution ?? null) : displaySolution;
+  const effectiveExplanation = isStaged ? (currentStage?.solutionExplanation ?? null) : displayExplanation;
 
   const handleRun = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
@@ -892,11 +895,11 @@ export default function ProblemDetail() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {problem.solution ? (
+                    {effectiveSolution ? (
                       <>
                         {/* Solution explanation */}
                         {/* Variant selector */}
-                        {hasVariants && (
+                        {hasVariants && !isStaged && (
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground shrink-0">Approach:</span>
                             <Select value={selectedVariantKey} onValueChange={setSelectedVariantKey}>
@@ -913,9 +916,9 @@ export default function ProblemDetail() {
                             </Select>
                           </div>
                         )}
-                        {displayExplanation && (
+                        {effectiveExplanation && (
                           <div className="prose prose-sm prose-invert max-w-none">
-                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{displayExplanation}</Streamdown>
+                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{effectiveExplanation}</Streamdown>
                           </div>
                         )}
                         {/* Solution code */}
@@ -923,11 +926,11 @@ export default function ProblemDetail() {
                          <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3a3a3a]">
                            <Code2 className="w-3.5 h-3.5 text-primary" />
                            <span className="text-xs font-medium text-muted-foreground">
-                             {activeVariant ? activeVariant.label : "solution.py"}
+                             {isStaged ? `Stage ${currentStageNumber} solution.py` : (activeVariant ? activeVariant.label : "solution.py")}
                            </span>
                          </div>
                           <div className="prose prose-sm prose-invert max-w-none overflow-auto max-h-[500px]">
-                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{`\`\`\`python\n${displaySolution ?? ""}\n\`\`\``}</Streamdown>
+                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{`\`\`\`python\n${effectiveSolution ?? ""}\n\`\`\``}</Streamdown>
                           </div>
                        </div>
                       </>

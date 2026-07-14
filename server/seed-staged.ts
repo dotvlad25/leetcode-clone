@@ -36,7 +36,7 @@ function generateTestFileContent(problemTitle: string, stage: StageSeed): string
     const desc = tc.description.replace(/\n/g, " ");
     // Indent each line of inputData by 8 spaces (inside the test method)
     const bodyLines = tc.inputData
-      .split("\\n")
+      .split("\n")
       .map(l => `        ${l}`);
     lines.push(`class Test_Stage${stage.stageNumber}_Case${testNum}(unittest.TestCase):`);
     lines.push(`    """`);
