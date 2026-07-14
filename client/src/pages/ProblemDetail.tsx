@@ -41,6 +41,51 @@ import {
 } from "@/components/ui/resizable";
 import type { ImperativePanelHandle } from "react-resizable-panels";
 
+// ── Persistent Read-Only Editor ───────────────────────────────────────────────
+// Stays mounted across tab switches; uses setValue() to swap content.
+// This avoids Monaco re-measuring fonts on every remount.
+function ReadOnlyEditor({ content }: { content: string }) {
+  const editorRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (model && model.getValue() !== content) {
+        model.setValue(content);
+      }
+    }
+  }, [content]);
+
+  return (
+    <Editor
+      height="100%"
+      defaultLanguage="python"
+      language="python"
+      defaultValue={content}
+      theme="vs-dark"
+      onMount={(editor, monaco) => {
+        editorRef.current = editor;
+        monaco.editor.remeasureFonts();
+        document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+      }}
+      options={{
+        fontSize: 13,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontLigatures: true,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        lineNumbers: "on",
+        readOnly: true,
+        domReadOnly: true,
+        wordWrap: "on",
+        padding: { top: 12, bottom: 12 },
+        renderLineHighlight: "none",
+        scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
+      }}
+    />
+  );
+}
+
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const cls =
     difficulty === "Easy" ? "badge-easy" :
@@ -453,9 +498,12 @@ export default function ProblemDetail() {
     [problem, code]
   );
 
-  // Shared onMount for read-only editors — just remeasure fonts
+  // Shared onMount for read-only editors — remeasure fonts immediately and after load
   const handleReadOnlyMount = useCallback(
     (_editor: any, monaco: any) => {
+      // Call immediately in case font is already loaded (e.g. tab switch after initial load)
+      monaco.editor.remeasureFonts();
+      // Also call after fonts.ready for the initial page load case
       document.fonts.ready.then(() => {
         monaco.editor.remeasureFonts();
       });
@@ -976,30 +1024,8 @@ export default function ProblemDetail() {
                        readOnlyContent = problem.unitTestCode ?? "# Unit tests not available";
                      }
                      return (
-                       <div key={readOnlyKey} className="h-full flex-col" style={{ display: "flex" }}>
-                         <Editor
-                           key={readOnlyKey}
-                           height="100%"
-                           defaultLanguage="python"
-                           language="python"
-                           value={readOnlyContent}
-                           theme="vs-dark"
-                           onMount={handleReadOnlyMount}
-                           options={{
-                             fontSize: 13,
-                             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                             fontLigatures: true,
-                             minimap: { enabled: false },
-                             scrollBeyondLastLine: false,
-                             lineNumbers: "on",
-                             readOnly: true,
-                             domReadOnly: true,
-                             wordWrap: "on",
-                             padding: { top: 12, bottom: 12 },
-                             renderLineHighlight: "none",
-                             scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
-                           }}
-                         />
+                       <div className="h-full flex-col" style={{ display: "flex" }}>
+                         <ReadOnlyEditor content={readOnlyContent} />
                        </div>
                      );
                    })()}
