@@ -1,0 +1,1 @@
+ALTER TABLE `problem_stages` ADD `testFileContent` text;

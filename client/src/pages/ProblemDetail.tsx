@@ -22,6 +22,7 @@ import {
   Play, Send, Brain, ChevronLeft, CheckCircle2, XCircle,
   Clock, AlertTriangle, Loader2, History, BarChart3, Terminal,
   Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb, Save,
+  FileCode2,
 } from "lucide-react";
 import { RotateCcw } from "lucide-react";
 import { Layers, ChevronRight, Lock, Unlock } from "lucide-react";
@@ -360,17 +361,24 @@ export default function ProblemDetail() {
 
   const { data: problem, isLoading } = trpc.problems.getBySlug.useQuery({ slug });
   const [code, setCode] = useState<string>("");
-  const [editorTab, setEditorTab] = useState<"solution" | "tests">("solution");
+  // fileTab: "solution" | "base_class" | "test_level_N" (for staged) | "tests" (for non-staged)
+  const [fileTab, setFileTab] = useState<string>("solution");
+  // Keep editorTab for legacy compatibility (non-staged problems still use "solution" | "tests")
+  const editorTab = fileTab === "solution" ? "solution" : "tests";
 
   // ── Staged problem state ─────────────────────────────────────────────────────
   const isStaged = !!(problem?.isStaged);
-  type StageData = { id: number; stageNumber: number; title: string; description: string; baseClass: string; starterCode: string; solution: string | null; solutionExplanation: string | null; };
+  type StageData = { id: number; stageNumber: number; title: string; description: string; baseClass: string; starterCode: string; solution: string | null; solutionExplanation: string | null; testFileContent: string | null; };
   const stages = (problem as any)?.stages as StageData[] | null;
   const [currentStageNumber, setCurrentStageNumber] = useState(1);
   const currentStage = stages?.find(s => s.stageNumber === currentStageNumber) ?? null;
   useEffect(() => {
     if (stages && stages.length > 0) setCurrentStageNumber(1);
+    setFileTab('solution');
   }, [problem?.id]);
+  useEffect(() => {
+    setFileTab('solution');
+  }, [currentStageNumber]);
 
   // ── Unlock gating ────────────────────────────────────────────────────────────
   const { data: unlockStatus, refetch: refetchUnlockStatus } = trpc.problems.getStageUnlockStatus.useQuery(
@@ -799,18 +807,19 @@ export default function ProblemDetail() {
               {/* Editor panel */}
               <ResizablePanel defaultSize={65} minSize={15}>
                 <div className="h-full flex flex-col bg-[#1e1e1e] overflow-hidden">
-                  {/* Editor tab bar */}
-                  <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1">
+                  {/* Editor tab bar — file-tab switcher (CodeSignal style) */}
+                  <div className="flex items-center border-b border-[#2d2d2d] bg-[#252526] shrink-0 px-1 overflow-x-auto">
                     <Link href="/problems">
-                      <button className="flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      <button className="flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0">
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
                     </Link>
-                    <div className="w-px h-4 bg-[#3a3a3a] mx-1" />
+                    <div className="w-px h-4 bg-[#3a3a3a] mx-1 shrink-0" />
+                    {/* solution.py — always present */}
                     <button
-                      onClick={() => setEditorTab("solution")}
-                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
-                        editorTab === "solution"
+                      onClick={() => setFileTab("solution")}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                        fileTab === "solution"
                           ? "border-primary text-foreground"
                           : "border-transparent text-muted-foreground hover:text-foreground"
                       }`}
@@ -818,18 +827,52 @@ export default function ProblemDetail() {
                       <Code2 className="w-3.5 h-3.5" />
                       solution.py
                     </button>
-                    <button
-                      onClick={() => setEditorTab("tests")}
-                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
-                        editorTab === "tests"
-                          ? "border-primary text-foreground"
-                          : "border-transparent text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <FlaskConical className="w-3.5 h-3.5" />
-                      test_cases.py
-                      <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
-                    </button>
+                    {/* base_class.py — staged problems only */}
+                    {isStaged && currentStage && (
+                      <button
+                        onClick={() => setFileTab("base_class")}
+                        className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                          fileTab === "base_class"
+                            ? "border-amber-400/80 text-amber-300"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <FileCode2 className="w-3.5 h-3.5" />
+                        base_class.py
+                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[#2d2d2d] text-[#888]">read-only</span>
+                      </button>
+                    )}
+                    {/* test_level_N.py — one tab per stage (cumulative), staged problems only */}
+                    {isStaged && stages && stages.map((s) => (
+                      <button
+                        key={`test_level_${s.stageNumber}`}
+                        onClick={() => setFileTab(`test_level_${s.stageNumber}`)}
+                        className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                          fileTab === `test_level_${s.stageNumber}`
+                            ? "border-emerald-400/80 text-emerald-300"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <FlaskConical className="w-3.5 h-3.5" />
+                        test_level_{s.stageNumber}.py
+                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[#2d2d2d] text-[#888]">read-only</span>
+                      </button>
+                    ))}
+                    {/* test_cases.py — non-staged problems only */}
+                    {!isStaged && (
+                      <button
+                        onClick={() => setFileTab("tests")}
+                        className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 shrink-0 ${
+                          fileTab === "tests"
+                            ? "border-primary text-foreground"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <FlaskConical className="w-3.5 h-3.5" />
+                        test_cases.py
+                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground">read-only</span>
+                      </button>
+                    )}
                     {/* Action buttons */}
                     <div className="ml-auto flex items-center gap-1 pr-2">
                       {lastSavedAt && editorTab === "solution" && (
@@ -875,127 +918,117 @@ export default function ProblemDetail() {
                     </div>
                   </div>
 
-                 {/* Monaco editor */}
+                 {/* Monaco editor — single full-height editor, content driven by fileTab */}
                  <div className="flex-1 overflow-hidden">
-                   {/* Both editors are always mounted; CSS display swap prevents re-mount on tab switch */}
-                   <div style={{ display: editorTab === "solution" ? "block" : "none" }} className="h-full">
-                      {isStaged && currentStage ? (
-                        <ResizablePanelGroup direction="vertical" className="h-full">
-                          <ResizablePanel defaultSize={35} minSize={15} maxSize={60}>
-                            <div className="h-full flex flex-col bg-[#161616]">
-                              <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-[#2d2d2d] bg-[#1a1a1a]">
-                                <Code2 className="w-3 h-3 text-[#888]" />
-                                <span className="text-[11px] text-[#888] font-mono">base_class.py</span>
-                                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-[#2d2d2d] text-[#666]">read-only</span>
-                              </div>
-                              <div className="flex-1 overflow-hidden">
-                                <Editor
-                                  height="100%"
-                                  defaultLanguage="python"
-                                  language="python"
-                                  value={currentStage.baseClass}
-                                  theme="vs-dark"
-                                  options={{
-                                    fontSize: 12,
-                                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                                    minimap: { enabled: false },
-                                    scrollBeyondLastLine: false,
-                                    lineNumbers: "on",
-                                    readOnly: true,
-                                    domReadOnly: true,
-                                    wordWrap: "on",
-                                    padding: { top: 8, bottom: 8 },
-                                    scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
-                                    renderLineHighlight: "none",
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </ResizablePanel>
-                          <ResizableHandle withHandle className="bg-[#2d2d2d] hover:bg-primary/40 transition-colors" />
-                          <ResizablePanel defaultSize={65} minSize={30}>
-                            <Editor
-                              height="100%"
-                              defaultLanguage="python"
-                              language="python"
-                              value={currentCode}
-                              onChange={(val) => setCode(val ?? "")}
-                              onMount={handleEditorMount}
-                              theme="vs-dark"
-                              options={{
-                                fontSize: 14,
-                                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                                fontLigatures: true,
-                                minimap: { enabled: false },
-                                scrollBeyondLastLine: false,
-                                lineNumbers: "on",
-                                renderLineHighlight: "line",
-                                tabSize: 4,
-                                insertSpaces: true,
-                                wordWrap: "on",
-                                padding: { top: 12, bottom: 12 },
-                                smoothScrolling: true,
-                                cursorBlinking: "smooth",
-                                bracketPairColorization: { enabled: true },
-                              }}
-                            />
-                          </ResizablePanel>
-                        </ResizablePanelGroup>
-                      ) : (
-                        <Editor
-                          height="100%"
-                          defaultLanguage="python"
-                          language="python"
-                          value={currentCode}
-                          onChange={(val) => setCode(val ?? "")}
-                          onMount={handleEditorMount}
-                          theme="vs-dark"
-                          options={{
-                            fontSize: 14,
-                            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                            fontLigatures: true,
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            lineNumbers: "on",
-                            renderLineHighlight: "line",
-                            tabSize: 4,
-                            insertSpaces: true,
-                            wordWrap: "on",
-                            padding: { top: 12, bottom: 12 },
-                            smoothScrolling: true,
-                            cursorBlinking: "smooth",
-                            bracketPairColorization: { enabled: true },
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div style={{ display: editorTab === "tests" ? "block" : "none" }} className="h-full">
-                      <Editor
-                        height="100%"
-                        defaultLanguage="python"
-                        language="python"
-                        value={isStaged ? (stagedUnitTestCode ?? "# Stage tests") : (problem.unitTestCode ?? "# Unit tests not available")}
-                        theme="vs-dark"
-                        options={{
-                          fontSize: 13,
-                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                          fontLigatures: true,
-                          minimap: { enabled: false },
-                          scrollBeyondLastLine: false,
-                          lineNumbers: "on",
-                          readOnly: true,
-                          renderLineHighlight: "line",
-                          tabSize: 4,
-                          wordWrap: "on",
-                          padding: { top: 12, bottom: 12 },
-                          smoothScrolling: true,
-                          cursorStyle: "line-thin",
-                          domReadOnly: true,
-                        }}
-                      />
-                    </div>
-                  </div>
+                   {/* solution.py — editable, always mounted to preserve editor state */}
+                   <div style={{ display: fileTab === "solution" ? "flex" : "none" }} className="h-full flex-col">
+                     <Editor
+                       height="100%"
+                       defaultLanguage="python"
+                       language="python"
+                       value={currentCode}
+                       onChange={(val) => setCode(val ?? "")}
+                       onMount={handleEditorMount}
+                       theme="vs-dark"
+                       options={{
+                         fontSize: 14,
+                         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                         fontLigatures: true,
+                         minimap: { enabled: false },
+                         scrollBeyondLastLine: false,
+                         lineNumbers: "on",
+                         renderLineHighlight: "line",
+                         tabSize: 4,
+                         insertSpaces: true,
+                         wordWrap: "on",
+                         padding: { top: 12, bottom: 12 },
+                         smoothScrolling: true,
+                         cursorBlinking: "smooth",
+                         bracketPairColorization: { enabled: true },
+                       }}
+                     />
+                   </div>
+                   {/* base_class.py — read-only, staged problems only */}
+                   {isStaged && currentStage && (
+                     <div style={{ display: fileTab === "base_class" ? "flex" : "none" }} className="h-full flex-col">
+                       <Editor
+                         height="100%"
+                         defaultLanguage="python"
+                         language="python"
+                         value={currentStage.baseClass}
+                         theme="vs-dark"
+                         options={{
+                           fontSize: 13,
+                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                           minimap: { enabled: false },
+                           scrollBeyondLastLine: false,
+                           lineNumbers: "on",
+                           readOnly: true,
+                           domReadOnly: true,
+                           wordWrap: "on",
+                           padding: { top: 12, bottom: 12 },
+                           renderLineHighlight: "none",
+                           scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
+                         }}
+                       />
+                     </div>
+                   )}
+                   {/* test_level_N.py — read-only, one per stage, staged problems only */}
+                   {isStaged && stages && stages.map((s) => (
+                     <div key={`test_level_editor_${s.stageNumber}`}
+                          style={{ display: fileTab === `test_level_${s.stageNumber}` ? "flex" : "none" }}
+                          className="h-full flex-col">
+                       <Editor
+                         height="100%"
+                         defaultLanguage="python"
+                         language="python"
+                         value={s.testFileContent ?? `# Tests for Stage ${s.stageNumber}: ${s.title}
+# (Test content not available)`}
+                         theme="vs-dark"
+                         options={{
+                           fontSize: 13,
+                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                           minimap: { enabled: false },
+                           scrollBeyondLastLine: false,
+                           lineNumbers: "on",
+                           readOnly: true,
+                           domReadOnly: true,
+                           wordWrap: "on",
+                           padding: { top: 12, bottom: 12 },
+                           renderLineHighlight: "none",
+                           scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
+                         }}
+                       />
+                     </div>
+                   ))}
+                   {/* test_cases.py — read-only, non-staged problems only */}
+                   {!isStaged && (
+                     <div style={{ display: fileTab === "tests" ? "flex" : "none" }} className="h-full flex-col">
+                       <Editor
+                         height="100%"
+                         defaultLanguage="python"
+                         language="python"
+                         value={problem.unitTestCode ?? "# Unit tests not available"}
+                         theme="vs-dark"
+                         options={{
+                           fontSize: 13,
+                           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                           minimap: { enabled: false },
+                           scrollBeyondLastLine: false,
+                           lineNumbers: "on",
+                           readOnly: true,
+                           domReadOnly: true,
+                           wordWrap: "on",
+                           padding: { top: 12, bottom: 12 },
+                           renderLineHighlight: "none",
+                           scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
+                         }}
+                       />
+                     </div>
+                   )}
+                 </div>
 
+                  {/* Always-visible bottom tab strip
                   {/* Always-visible bottom tab strip — stays visible even when panel is collapsed */}
                   <div className="shrink-0 border-t border-[#2d2d2d] bg-[#252526]">
                     <Tabs value={activeBottomTab} onValueChange={(v) => {

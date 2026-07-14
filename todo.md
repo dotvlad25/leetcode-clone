@@ -88,3 +88,9 @@
 - [x] Frontend: show unlock celebration toast when a stage is passed
 - [x] Update analyzeCode to accept optional stageNumber + baseClass for stage-aware AI hints
 - [x] AI prompt: include current stage base class, suggest next abstract method to implement
+- [ ] Replace vertical split with file-tab switcher (solution.py / base_class.py / test_level_N.py)
+- [x] Replace vertical split with file-tab switcher (solution.py / base_class.py / test_level_N.py)
+- [x] Show actual test file content in test_level_N.py tabs (cumulative per stage)
+- [x] Ensure testFileContent is stored per stage and returned by getBySlug
+- [x] Add generateTestFileContent helper to seed-staged.ts (durable for fresh installs)
+- [x] Add backfillTestFileContent post-seed function to populate null rows on startup

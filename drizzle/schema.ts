@@ -43,6 +43,7 @@ export const problemStages = mysqlTable("problem_stages", {
   starterCode: text("starterCode").notNull(),
   solution: text("solution"),
   solutionExplanation: text("solutionExplanation"),
+  testFileContent: text("testFileContent"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

@@ -206,6 +206,7 @@ export async function seedStagedProblemIfNotExists(
     solution?: string;
     solutionExplanation?: string;
     testCases: Array<{ description: string; inputData: string; expectedOutput: string; orderIndex: number }>;
+    testFileContent?: string;
   }>
 ) {
   const db = await getDb();
@@ -227,6 +228,7 @@ export async function seedStagedProblemIfNotExists(
       starterCode: stage.starterCode,
       solution: stage.solution ?? null,
       solutionExplanation: stage.solutionExplanation ?? null,
+      testFileContent: stage.testFileContent ?? null,
     }).$returningId();
     const stageId = stageResult.id;
     if (stage.testCases.length > 0) {

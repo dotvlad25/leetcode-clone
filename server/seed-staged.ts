@@ -1,4 +1,94 @@
 import { seedStagedProblemIfNotExists } from "./db";
+import { getDb } from "./db";
+import { problemStages, problems } from "../drizzle/schema";
+import { eq, and } from "drizzle-orm";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: generate a human-readable cumulative Python unittest file for display
+// in the test_level_N.py tab. Stages 1..N are all included (cumulative).
+// ─────────────────────────────────────────────────────────────────────────────
+type StageSeed = {
+  stageNumber: number;
+  title: string;
+  testCases: Array<{ description: string; inputData: string; expectedOutput: string; orderIndex: number }>;
+};
+
+function generateTestFileContent(problemTitle: string, cumulativeStages: StageSeed[]): string {
+  const lastStage = cumulativeStages[cumulativeStages.length - 1];
+  const lines: string[] = [
+    "import unittest",
+    "import sys",
+    "",
+    `# Test file for: ${problemTitle}`,
+    `# Cumulative through Stage ${lastStage.stageNumber}: ${lastStage.title}`,
+    "# This file shows the tests that will run when you submit.",
+    "# Your solution.py code is injected before these tests at runtime.",
+    "",
+    "# ─── paste your solution here to run locally ───",
+    "# from solution import *",
+    "",
+  ];
+  let testNum = 1;
+  for (const stage of cumulativeStages) {
+    lines.push(`# ${"─".repeat(60)}`);
+    lines.push(`# Stage ${stage.stageNumber}: ${stage.title}`);
+    lines.push(`# ${"─".repeat(60)}`);
+    lines.push("");
+    for (const tc of stage.testCases) {
+      const desc = tc.description.replace(/\n/g, " ");
+      lines.push(`class Test_Stage${stage.stageNumber}_Case${testNum}(unittest.TestCase):`);
+      lines.push(`    """`);
+      lines.push(`    ${desc}`);
+      lines.push(`    Expected output:`);
+      for (const expLine of tc.expectedOutput.trim().split("\n")) {
+        lines.push(`      ${expLine}`);
+      }
+      lines.push(`    """`);
+      lines.push(`    def test(self):`);
+      lines.push(`        import io, contextlib`);
+      lines.push(`        buf = io.StringIO()`);
+      lines.push(`        with contextlib.redirect_stdout(buf):`);
+      for (const codeLine of tc.inputData.split("\n")) {
+        lines.push(`            ${codeLine}`);
+      }
+      lines.push(`        actual = buf.getvalue().strip()`);
+      lines.push(`        expected = ${JSON.stringify(tc.expectedOutput.trim())}`);
+      lines.push(`        self.assertEqual(actual, expected)`);
+      lines.push("");
+      testNum++;
+    }
+  }
+  lines.push("");
+  lines.push("if __name__ == '__main__':");
+  lines.push("    unittest.main()");
+  lines.push("");
+  return lines.join("\n");
+}
+
+/**
+ * Idempotent: updates testFileContent for all stages of a problem (by slug).
+ * Called after seedStagedProblemIfNotExists so even existing rows get the content.
+ */
+async function ensureTestFileContent(
+  slug: string,
+  problemTitle: string,
+  stages: StageSeed[]
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const [prob] = await db.select({ id: problems.id }).from(problems).where(eq(problems.slug, slug));
+  if (!prob) return;
+  for (let i = 0; i < stages.length; i++) {
+    const cumulativeStages = stages.slice(0, i + 1);
+    const content = generateTestFileContent(problemTitle, cumulativeStages);
+    await db.update(problemStages)
+      .set({ testFileContent: content })
+      .where(and(
+        eq(problemStages.problemId, prob.id),
+        eq(problemStages.stageNumber, stages[i].stageNumber)
+      ));
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: each staged test case's inputData is a Python snippet that
@@ -2518,4 +2608,48 @@ export async function runStagedSeed() {
       },
     ]
   );
+
+  // ── Post-seed: ensure testFileContent is populated for all staged stages ────
+  await backfillTestFileContent();
+}
+
+/**
+ * For every staged problem stage that has null testFileContent, generate and
+ * store the cumulative Python unittest display file.
+ * Safe to call multiple times (only updates rows where testFileContent is null).
+ */
+async function backfillTestFileContent(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const { stageTestCases } = await import("../drizzle/schema");
+  const allProblems = await db.select({ id: problems.id, title: problems.title })
+    .from(problems)
+    .where(eq(problems.isStaged, 1));
+  for (const prob of allProblems) {
+    const stages = await db.select().from(problemStages)
+      .where(eq(problemStages.problemId, prob.id))
+      .orderBy(problemStages.stageNumber);
+    const needsUpdate = stages.some(s => !s.testFileContent);
+    if (!needsUpdate) continue;
+    const stagesWithCases: StageSeed[] = [];
+    for (const stage of stages) {
+      const cases = await db.select({
+        description: stageTestCases.description,
+        inputData: stageTestCases.inputData,
+        expectedOutput: stageTestCases.expectedOutput,
+        orderIndex: stageTestCases.orderIndex,
+      }).from(stageTestCases)
+        .where(eq(stageTestCases.stageId, stage.id))
+        .orderBy(stageTestCases.orderIndex);
+      stagesWithCases.push({ stageNumber: stage.stageNumber, title: stage.title, testCases: cases });
+    }
+    for (let i = 0; i < stages.length; i++) {
+      if (stages[i].testFileContent) continue;
+      const content = generateTestFileContent(prob.title, stagesWithCases.slice(0, i + 1));
+      await db.update(problemStages)
+        .set({ testFileContent: content })
+        .where(eq(problemStages.id, stages[i].id));
+    }
+    console.log(`[Seed] Backfilled testFileContent for: ${prob.title}`);
+  }
 }
