@@ -1991,8 +1991,8 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Finds duplicate files in a temp directory",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    groups = [sorted(g) for g in groups]\n    print(len(groups) == 1)\n    print(len(groups[0]) == 2)`,
-            expectedOutput: "True\nTrue",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    # Compare structure: 1 group, 2 files with "hello" content\n    result = [sorted([os.path.basename(p) for p in g]) for g in groups]\n    print(result)`,
+            expectedOutput: "[['a.txt', 'b.txt']]",
             orderIndex: 0,
           },
           {
@@ -2003,8 +2003,8 @@ export async function runStagedSeed() {
           },
           {
             description: "Handles multiple duplicate groups",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","x"),("b.txt","x"),("c.txt","y"),("e.txt","y")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    print(len(groups) == 2)`,
-            expectedOutput: "True",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","x"),("b.txt","x"),("c.txt","y"),("e.txt","y")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    result = sorted([sorted([os.path.basename(p) for p in g]) for g in groups])\n    print(result)`,
+            expectedOutput: "[['a.txt', 'b.txt'], ['c.txt', 'e.txt']]",
             orderIndex: 2,
           },
         ],
@@ -2020,8 +2020,8 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Optimized finder returns same results as basic",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    g1 = [sorted(g) for g in finder.find_duplicates(d)]\n    g2 = [sorted(g) for g in finder.find_duplicates_optimized(d)]\n    print(g1 == g2)`,
-            expectedOutput: "True",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    g1 = sorted([sorted([os.path.basename(p) for p in g]) for g in finder.find_duplicates(d)])\n    g2 = sorted([sorted([os.path.basename(p) for p in g]) for g in finder.find_duplicates_optimized(d)])\n    print(g1)\n    print(g2)`,
+            expectedOutput: "[['a.txt', 'b.txt']]\n[['a.txt', 'b.txt']]",
             orderIndex: 0,
           },
           {
@@ -2058,14 +2058,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic trace: start and end events",
-            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "foo", "bar"], ["main", "foo"], []])\nby_key = {(e.function, e.depth, e.event_type): e.timestamp for e in events}\nprint(by_key.get(("main", 0, "start")))\nprint(by_key.get(("foo", 1, "start")))\nprint(by_key.get(("bar", 2, "start")))\nprint(by_key.get(("bar", 2, "end")))\nprint(by_key.get(("foo", 1, "end")))\nprint(by_key.get(("main", 0, "end")))`,
-            expectedOutput: "0\n0\n1\n2\n3\n3",
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "foo", "bar"], ["main", "foo"], []])\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
+            expectedOutput: "[('main', 0, 'start', 0), ('foo', 1, 'start', 0), ('bar', 2, 'start', 1), ('bar', 2, 'end', 2), ('foo', 1, 'end', 3), ('main', 0, 'end', 3)]",
             orderIndex: 0,
           },
           {
             description: "Recursive calls tracked by position",
-            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "solve"], ["main", "solve", "solve"], ["main", "solve"], []])\nby_key = {(e.function, e.depth, e.event_type): e.timestamp for e in events}\nprint(by_key.get(("solve", 1, "start")))\nprint(by_key.get(("solve", 2, "start")))\nprint(by_key.get(("solve", 2, "end")))\nprint(by_key.get(("solve", 1, "end")))`,
-            expectedOutput: "0\n1\n2\n3",
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "solve"], ["main", "solve", "solve"], ["main", "solve"], []])\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
+            expectedOutput: "[('main', 0, 'start', 0), ('solve', 1, 'start', 0), ('solve', 2, 'start', 1), ('solve', 2, 'end', 2), ('solve', 1, 'end', 3), ('main', 0, 'end', 3)]",
             orderIndex: 1,
           },
           {
@@ -2073,6 +2073,12 @@ export async function runStagedSeed() {
             inputData: `p = Profiler()\nprint(p.convert_to_events([]))`,
             expectedOutput: "[]",
             orderIndex: 2,
+          },
+          {
+            description: "Mid-stream stack swap emits end then start at same depth",
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "bar"], []])\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
+            expectedOutput: "[('main', 0, 'start', 0), ('foo', 1, 'start', 0), ('foo', 1, 'end', 1), ('bar', 1, 'start', 1), ('bar', 1, 'end', 2), ('main', 0, 'end', 2)]",
+            orderIndex: 3,
           },
         ],
       },
@@ -2087,14 +2093,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Denoising filters short-lived functions",
-            inputData: `p = Profiler()\nsnaps = [["main"]] * 5 + [["main", "noise"]] + [["main"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\nfuncs = {e.function for e in events}\nprint("main" in funcs)\nprint("noise" not in funcs)`,
-            expectedOutput: "True\nTrue",
+            inputData: `p = Profiler()\nsnaps = [["main"]] * 5 + [["main", "noise"]] + [["main"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
+            expectedOutput: "[('main', 0, 'start', 0), ('main', 0, 'end', 11)]",
             orderIndex: 0,
           },
           {
             description: "Denoising keeps long-lived functions",
-            inputData: `p = Profiler()\nsnaps = [["main", "worker"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\nfuncs = {e.function for e in events}\nprint("main" in funcs)\nprint("worker" in funcs)`,
-            expectedOutput: "True\nTrue",
+            inputData: `p = Profiler()\nsnaps = [["main", "worker"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
+            expectedOutput: "[('main', 0, 'start', 0), ('worker', 1, 'start', 0), ('main', 0, 'end', 5), ('worker', 1, 'end', 5)]",
             orderIndex: 1,
           },
         ],
