@@ -332,7 +332,7 @@ try:
     from contextlib import redirect_stdout
     buf = io.StringIO()
     with redirect_stdout(buf):
-        exec(input_lines, {"__builtins__": __builtins__})
+        exec(input_lines, globals())
     actual = buf.getvalue().strip()
     if actual == expected:
         print(json.dumps({"passed": True, "actual": actual}))

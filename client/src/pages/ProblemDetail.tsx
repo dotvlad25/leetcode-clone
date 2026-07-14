@@ -43,9 +43,11 @@ import type { ImperativePanelHandle } from "react-resizable-panels";
 
 // ── Persistent Read-Only Editor ───────────────────────────────────────────────
 // Stays mounted across tab switches; uses setValue() to swap content.
-// This avoids Monaco re-measuring fonts on every remount.
-function ReadOnlyEditor({ content }: { content: string }) {
+// The `visible` prop hides the editor via display:none instead of unmounting it —
+// this prevents Monaco from losing its font measurement state on every tab switch.
+function ReadOnlyEditor({ content, visible = true }: { content: string; visible?: boolean }) {
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
 
   useEffect(() => {
     if (editorRef.current) {
@@ -56,33 +58,81 @@ function ReadOnlyEditor({ content }: { content: string }) {
     }
   }, [content]);
 
-  return (
-    <Editor
-      height="100%"
-      defaultLanguage="python"
-      language="python"
-      defaultValue={content}
-      theme="vs-dark"
-      onMount={(editor, monaco) => {
-        editorRef.current = editor;
-        monaco.editor.remeasureFonts();
-        document.fonts.ready.then(() => monaco.editor.remeasureFonts());
-      }}
-      options={{
-        fontSize: 13,
+  // Re-measure fonts and trigger a layout pass whenever the editor becomes visible.
+  useEffect(() => {
+    if (!visible || !editorRef.current || !monacoRef.current) return;
+    const relayout = () => {
+      editorRef.current?.layout();
+      monacoRef.current?.editor.remeasureFonts();
+    };
+    const frame = requestAnimationFrame(() => {
+      relayout();
+      requestAnimationFrame(relayout);
+    });
+    document.fonts.ready.then(relayout);
+    return () => cancelAnimationFrame(frame);
+  }, [visible]);
+
+  // Re-apply fontFamily via updateOptions whenever the editor becomes visible.
+  // Monaco can silently drop the web font when the container is hidden/shown;
+  // calling updateOptions() forces it to re-evaluate the font stack.
+  useEffect(() => {
+    if (!visible || !editorRef.current) return;
+    const apply = () => {
+      editorRef.current?.updateOptions({
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         fontLigatures: true,
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
-        lineNumbers: "on",
-        readOnly: true,
-        domReadOnly: true,
-        wordWrap: "on",
-        padding: { top: 12, bottom: 12 },
-        renderLineHighlight: "none",
-        scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
-      }}
-    />
+      });
+      editorRef.current?.layout();
+      monacoRef.current?.editor.remeasureFonts();
+    };
+    const frame = requestAnimationFrame(() => { apply(); requestAnimationFrame(apply); });
+    document.fonts.ready.then(apply);
+    return () => cancelAnimationFrame(frame);
+  }, [visible]);
+
+  return (
+    <div style={{
+      position: visible ? "relative" : "absolute",
+      inset: 0,
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      visibility: visible ? "visible" : "hidden",
+      pointerEvents: visible ? "auto" : "none",
+      zIndex: visible ? 1 : 0,
+    }}>
+      <Editor
+        height="100%"
+        defaultLanguage="python"
+        language="python"
+        defaultValue={content}
+        theme="vs-dark"
+        onMount={(editor, monaco) => {
+          editorRef.current = editor;
+          monacoRef.current = monaco;
+          monaco.editor.remeasureFonts();
+          document.fonts.ready.then(() => {
+            editor.layout();
+            monaco.editor.remeasureFonts();
+          });
+        }}
+        options={{
+          fontSize: 13,
+          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          fontLigatures: true,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          lineNumbers: "on",
+          readOnly: true,
+          domReadOnly: true,
+          wordWrap: "on",
+          padding: { top: 12, bottom: 12 },
+          renderLineHighlight: "none",
+          scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
+        }}
+      />
+    </div>
   );
 }
 
@@ -477,6 +527,8 @@ export default function ProblemDetail() {
   const [bottomOpen, setBottomOpen] = useState(false);
   const [leftTab, setLeftTab] = useState<"instructions" | "solution">("instructions");
   const bottomPanelRef = useRef<ImperativePanelHandle>(null);
+  const solutionEditorRef = useRef<any>(null);
+  const solutionMonacoRef = useRef<any>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
@@ -494,12 +546,17 @@ export default function ProblemDetail() {
 
   const handleEditorMount = useCallback(
     (editor: any, monaco: any) => {
+      solutionEditorRef.current = editor;
+      solutionMonacoRef.current = monaco;
+      editor.layout();
+      monaco.editor.remeasureFonts();
       // Force Monaco to remeasure fonts after web fonts finish loading
       document.fonts.ready.then(() => {
+        editor.layout();
         monaco.editor.remeasureFonts();
       });
     },
-    [problem, code]
+    []
   );
 
   // Shared onMount for read-only editors — remeasure fonts immediately and after load
@@ -514,6 +571,44 @@ export default function ProblemDetail() {
     },
     []
   );
+
+  // Re-layout and remeasure fonts when switching back to the solution tab so
+  // Monaco does not revert to the fallback monospace font.
+  useEffect(() => {
+    if (fileTab !== "solution") return;
+    const editor = solutionEditorRef.current;
+    const monaco = solutionMonacoRef.current;
+    if (!editor || !monaco) return;
+    const relayout = () => {
+      editor.layout();
+      monaco.editor.remeasureFonts();
+      editor.render(true);
+    };
+    const frame1 = requestAnimationFrame(() => {
+      relayout();
+      requestAnimationFrame(relayout);
+    });
+    document.fonts.ready.then(relayout);
+    return () => cancelAnimationFrame(frame1);
+  }, [fileTab]);
+
+  // Re-apply fontFamily via updateOptions on every tab switch for the solution editor.
+  useEffect(() => {
+    const editor = solutionEditorRef.current;
+    const monaco = solutionMonacoRef.current;
+    if (!editor || !monaco) return;
+    const apply = () => {
+      editor.updateOptions({
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontLigatures: true,
+      });
+      editor.layout();
+      monaco.editor.remeasureFonts();
+    };
+    const frame = requestAnimationFrame(() => { apply(); requestAnimationFrame(apply); });
+    document.fonts.ready.then(apply);
+    return () => cancelAnimationFrame(frame);
+  }, [fileTab]);
 
   const submitStageMutation = trpc.problems.submitStage.useMutation({
     onSuccess: (data) => {
@@ -1011,7 +1106,16 @@ export default function ProblemDetail() {
                  {/* Monaco editor — single full-height editor, content driven by fileTab */}
                  <div className="flex-1 overflow-hidden">
                    {/* solution.py — editable, always mounted to preserve editor state */}
-                   <div style={{ display: fileTab === "solution" ? "flex" : "none" }} className="h-full flex-col">
+                   <div style={{
+                     position: fileTab === "solution" ? "relative" : "absolute",
+                     inset: 0,
+                     height: "100%",
+                     display: "flex",
+                     flexDirection: "column",
+                     visibility: fileTab === "solution" ? "visible" : "hidden",
+                     pointerEvents: fileTab === "solution" ? "auto" : "none",
+                     zIndex: fileTab === "solution" ? 1 : 0,
+                   }}>
                      <Editor
                        height="100%"
                        defaultLanguage="python"
@@ -1039,25 +1143,27 @@ export default function ProblemDetail() {
                      />
                    </div>
                    {/* Read-only viewer: base_class.py / test_level_N.py / test_cases.py */}
-                   {fileTab !== "solution" && (() => {
-                     // Compute the content and key for the single read-only editor
-                     let readOnlyContent = "";
-                     let readOnlyKey = fileTab;
-                     if (fileTab === "base_class" && isStaged && currentStage) {
-                       readOnlyContent = currentStage.baseClass;
-                     } else if (fileTab.startsWith("test_level_") && isStaged && stages) {
-                       const stageNum = parseInt(fileTab.replace("test_level_", ""), 10);
-                       const targetStage = stages.find(s => s.stageNumber === stageNum);
-                       readOnlyContent = targetStage?.testFileContent ?? `# Tests for Stage ${stageNum}\n# (Test content not available)`;
-                     } else if (fileTab === "tests" && !isStaged) {
-                       readOnlyContent = problem.unitTestCode ?? "# Unit tests not available";
-                     }
-                     return (
-                       <div className="h-full flex-col" style={{ display: "flex" }}>
-                         <ReadOnlyEditor content={readOnlyContent} />
-                       </div>
-                     );
-                   })()}
+                   {/* Read-only editors — always mounted, visibility toggled via display:none.
+                       Prevents Monaco from losing font measurement state on remount. */}
+                   {isStaged && currentStage && (
+                     <ReadOnlyEditor
+                       content={currentStage.baseClass}
+                       visible={fileTab === "base_class"}
+                     />
+                   )}
+                   {isStaged && stages && stages.map((s) => (
+                     <ReadOnlyEditor
+                       key={`test_level_${s.stageNumber}`}
+                       content={s.testFileContent ?? `# Tests for Stage ${s.stageNumber}\n# (Test content not available)`}
+                       visible={fileTab === `test_level_${s.stageNumber}`}
+                     />
+                   ))}
+                   {!isStaged && (
+                     <ReadOnlyEditor
+                       content={problem?.unitTestCode ?? "# Unit tests not available"}
+                       visible={fileTab === "tests"}
+                     />
+                   )}
                  </div>
 
                   {/* Always-visible bottom tab strip

@@ -98,3 +98,8 @@
 ## UX Polish (NEW)
 - [x] Scrollable file-tab bar with fade indicators for 4-stage problems (no overflow)
 - [x] Stage-switch draft-saved tooltip/toast when switching between stages
+
+## Bug Fixes
+- [x] Fix NameError in staged executor: exec() used isolated globals dict, hiding user-defined classes
+- [x] Fix Monaco font regression: updateOptions() re-applies fontFamily on every tab switch; CSS !important extended to Monaco container elements; ReadOnlyEditor always mounted via display:none
+- [x] Verified staged problem runner: RateLimiter NameError resolved (exec uses globals())

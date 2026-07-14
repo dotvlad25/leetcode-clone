@@ -143,6 +143,13 @@
   font-family: "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace !important;
   font-feature-settings: "liga" 1, "calt" 1;
 }
+/* Also target the editor's own container font so Monaco inherits it */
+.monaco-editor,
+.monaco-editor-background,
+.monaco-editor .margin,
+.monaco-editor .overflow-guard {
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace !important;
+}
 
 /* ── File Tab Bar — hide scrollbar while keeping scroll behaviour ─────────── */
 .tab-scroll-area {
