@@ -338,31 +338,25 @@ export function buildStagedTestScript(
 import json, sys, traceback
 import builtins as _builtins
 _orig_print = _builtins.print
-# Redirect user print() calls to stderr; result JSON always uses _orig_print (stdout)
-def print(*args, **kwargs):
-    kwargs.setdefault('file', sys.stderr)
-    _orig_print(*args, **kwargs)
 
 ${baseClass}
 
 ${userCode}
 
 try:
-    input_lines = ${JSON.stringify(inputData)}
-    expected_raw = ${JSON.stringify(expectedOutput)}
-    expected = expected_raw.strip()
-    # Execute the input as a script and capture stdout
-    import io
-    from contextlib import redirect_stdout
-    buf = io.StringIO()
-    # Pass the stderr-redirected print into exec() so user prints inside exec go to stderr too
-    with redirect_stdout(buf):
-        exec(input_lines, {**globals(), 'print': print})
-    actual = buf.getvalue().strip()
+    # User print() calls go to stderr for display; they don't affect comparison
+    def print(*args, **kwargs):
+        kwargs.setdefault('file', sys.stderr)
+        _orig_print(*args, **kwargs)
+    ns = {**globals(), 'print': print}
+    exec(${JSON.stringify(inputData)}, ns)
+    actual = ns.get('_result')
+    # expectedOutput is a JSON string; parse it to get the Python value for comparison
+    expected = json.loads(${JSON.stringify(expectedOutput)})
     if actual == expected:
-        _orig_print(json.dumps({"passed": True, "actual": actual}))
+        _orig_print(json.dumps({"passed": True, "actual": repr(actual)}))
     else:
-        _orig_print(json.dumps({"passed": False, "actual": actual, "expected": expected}))
+        _orig_print(json.dumps({"passed": False, "actual": repr(actual), "expected": repr(expected)}))
 except Exception as e:
     _orig_print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
 `.trim();

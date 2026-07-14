@@ -39,20 +39,12 @@ function generateTestFileContent(problemTitle: string, stage: StageSeed): string
     lines.push(`    """`);
     lines.push(`    ${desc}`);
     lines.push(`    Expected output:`);
-    for (const expLine of tc.expectedOutput.trim().split("\n")) {
-      lines.push(`      ${expLine}`);
-    }
+    lines.push(`      ${JSON.stringify(tc.expectedOutput)}`);
     lines.push(`    """`);
     lines.push(`    def test(self):`);
-    lines.push(`        import io, contextlib`);
-    lines.push(`        buf = io.StringIO()`);
-    lines.push(`        with contextlib.redirect_stdout(buf):`);
-    for (const codeLine of tc.inputData.split("\n")) {
-      lines.push(`            ${codeLine}`);
-    }
-    lines.push(`        actual = buf.getvalue().strip()`);
-    lines.push(`        expected = ${JSON.stringify(tc.expectedOutput.trim())}`);
-    lines.push(`        self.assertEqual(actual, expected)`);
+    lines.push(`        ns = {**globals()}`);
+    lines.push(`        exec(${JSON.stringify(tc.inputData)}, ns)`);
+    lines.push(`        self.assertEqual(ns.get('_result'), ${JSON.stringify(tc.expectedOutput)})`);
     lines.push("");
     testNum++;
   }
@@ -90,7 +82,8 @@ async function ensureTestFileContent(
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: each staged test case's inputData is a Python snippet that
 // instantiates the class (already in scope via baseClass + userCode) and
-// prints the result. expectedOutput is the exact printed string.
+// assigns the result to _result. expectedOutput is the actual Python value
+// (not a string repr) that _result is compared against directly.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1901,20 +1894,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic allow/deny within window",
-            inputData: `import time\nrl = RateLimiter(max_requests=3, window_seconds=60.0)\nresults = [rl.allow_request("alice") for _ in range(4)]\nprint(results)`,
-            expectedOutput: "[True, True, True, False]",
+            inputData: `import time\nrl = RateLimiter(max_requests=3, window_seconds=60.0)\n_result = [rl.allow_request("alice") for _ in range(4)]`,
+            expectedOutput: "[true, true, true, false]",
             orderIndex: 0,
           },
           {
             description: "Different users have independent limits",
-            inputData: `import time\nrl = RateLimiter(max_requests=2, window_seconds=60.0)\nprint(rl.allow_request("alice"))  # True\nprint(rl.allow_request("alice"))  # True\nprint(rl.allow_request("alice"))  # False\nprint(rl.allow_request("bob"))    # True`,
-            expectedOutput: "True\nTrue\nFalse\nTrue",
+            inputData: `import time\nrl = RateLimiter(max_requests=2, window_seconds=60.0)\n_result = [rl.allow_request("alice"), rl.allow_request("alice"), rl.allow_request("alice"), rl.allow_request("bob")]`,
+            expectedOutput: "[true, true, false, true]",
             orderIndex: 1,
           },
           {
             description: "Single request always allowed",
-            inputData: `rl = RateLimiter(max_requests=1, window_seconds=60.0)\nprint(rl.allow_request("x"))  # True\nprint(rl.allow_request("x"))  # False`,
-            expectedOutput: "True\nFalse",
+            inputData: `rl = RateLimiter(max_requests=1, window_seconds=60.0)\n_result = [rl.allow_request("x"), rl.allow_request("x")]`,
+            expectedOutput: "[true, false]",
             orderIndex: 2,
           },
         ],
@@ -1930,13 +1923,13 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Cleanup removes expired users",
-            inputData: `import time\nrl = RateLimiter(max_requests=5, window_seconds=0.001)\nrl.allow_request("alice")\nrl.allow_request("bob")\ntime.sleep(0.05)\ncount = rl.cleanup()\nprint(count >= 2)`,
-            expectedOutput: "True",
+            inputData: `import time\nrl = RateLimiter(max_requests=5, window_seconds=0.001)\nrl.allow_request("alice")\nrl.allow_request("bob")\ntime.sleep(0.05)\ncount = rl.cleanup()\n_result = count >= 2`,
+            expectedOutput: "true",
             orderIndex: 0,
           },
           {
             description: "Cleanup returns 0 when no users expired",
-            inputData: `rl = RateLimiter(max_requests=5, window_seconds=60.0)\nrl.allow_request("alice")\nprint(rl.cleanup())`,
+            inputData: `rl = RateLimiter(max_requests=5, window_seconds=60.0)\nrl.allow_request("alice")\n_result = rl.cleanup()`,
             expectedOutput: "0",
             orderIndex: 1,
           },
@@ -1953,14 +1946,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Thread-safe version respects limits under concurrency",
-            inputData: `import threading\nrl = RateLimiter(max_requests=50, window_seconds=60.0)\nresults = []\nlock = threading.Lock()\ndef req():\n    r = rl.allow_request_thread_safe("alice")\n    with lock: results.append(r)\nthreads = [threading.Thread(target=req) for _ in range(60)]\nfor t in threads: t.start()\nfor t in threads: t.join()\nprint(results.count(True) == 50)\nprint(results.count(False) == 10)`,
-            expectedOutput: "True\nTrue",
+            inputData: `import threading\nrl = RateLimiter(max_requests=50, window_seconds=60.0)\nresults = []\nlock = threading.Lock()\ndef req():\n    r = rl.allow_request_thread_safe("alice")\n    with lock: results.append(r)\nthreads = [threading.Thread(target=req) for _ in range(60)]\nfor t in threads: t.start()\nfor t in threads: t.join()\n_result = [results.count(True) == 50, results.count(False) == 10]`,
+            expectedOutput: "[true, true]",
             orderIndex: 0,
           },
           {
             description: "Thread-safe allows independent users concurrently",
-            inputData: `import threading\nrl = RateLimiter(max_requests=1, window_seconds=60.0)\nresults = {}\nlock = threading.Lock()\ndef req(uid):\n    r = rl.allow_request_thread_safe(uid)\n    with lock: results[uid] = r\nthreads = [threading.Thread(target=req, args=(f"user{i}",)) for i in range(5)]\nfor t in threads: t.start()\nfor t in threads: t.join()\nprint(all(results.values()))`,
-            expectedOutput: "True",
+            inputData: `import threading\nrl = RateLimiter(max_requests=1, window_seconds=60.0)\nresults = {}\nlock = threading.Lock()\ndef req(uid):\n    r = rl.allow_request_thread_safe(uid)\n    with lock: results[uid] = r\nthreads = [threading.Thread(target=req, args=(f"user{i}",)) for i in range(5)]\nfor t in threads: t.start()\nfor t in threads: t.join()\n_result = all(results.values())`,
+            expectedOutput: "true",
             orderIndex: 1,
           },
         ],
@@ -1991,20 +1984,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Finds duplicate files in a temp directory",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    # Compare structure: 1 group, 2 files with "hello" content\n    result = [sorted([os.path.basename(p) for p in g]) for g in groups]\n    print(result)`,
-            expectedOutput: "[['a.txt', 'b.txt']]",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    _result = [sorted([os.path.basename(p) for p in g]) for g in groups]`,
+            expectedOutput: `[["a.txt", "b.txt"]]`,
             orderIndex: 0,
           },
           {
             description: "Returns empty list when no duplicates",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","aaa"),("b.txt","bbb"),("c.txt","ccc")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    print(groups)`,
-            expectedOutput: "[]",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","aaa"),("b.txt","bbb"),("c.txt","ccc")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    _result = finder.find_duplicates(d)`,
+            expectedOutput: `[]`,
             orderIndex: 1,
           },
           {
             description: "Handles multiple duplicate groups",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","x"),("b.txt","x"),("c.txt","y"),("e.txt","y")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    result = sorted([sorted([os.path.basename(p) for p in g]) for g in groups])\n    print(result)`,
-            expectedOutput: "[['a.txt', 'b.txt'], ['c.txt', 'e.txt']]",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","x"),("b.txt","x"),("c.txt","y"),("e.txt","y")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    groups = finder.find_duplicates(d)\n    _result = sorted([sorted([os.path.basename(p) for p in g]) for g in groups])`,
+            expectedOutput: `[["a.txt", "b.txt"], ["c.txt", "e.txt"]]`,
             orderIndex: 2,
           },
         ],
@@ -2020,14 +2013,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Optimized finder returns same results as basic",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    g1 = sorted([sorted([os.path.basename(p) for p in g]) for g in finder.find_duplicates(d)])\n    g2 = sorted([sorted([os.path.basename(p) for p in g]) for g in finder.find_duplicates_optimized(d)])\n    print(g1)\n    print(g2)`,
-            expectedOutput: "[['a.txt', 'b.txt']]\n[['a.txt', 'b.txt']]",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","hello"),("b.txt","hello"),("c.txt","world")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    g1 = sorted([sorted([os.path.basename(p) for p in g]) for g in finder.find_duplicates(d)])\n    g2 = sorted([sorted([os.path.basename(p) for p in g]) for g in finder.find_duplicates_optimized(d)])\n    _result = [g1, g2]`,
+            expectedOutput: `[[["a.txt", "b.txt"]], [["a.txt", "b.txt"]]]`,
             orderIndex: 0,
           },
           {
             description: "Optimized handles no duplicates",
-            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","aaa"),("b.txt","bbb")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    print(finder.find_duplicates_optimized(d))`,
-            expectedOutput: "[]",
+            inputData: `import os, tempfile\nwith tempfile.TemporaryDirectory() as d:\n    for name, content in [("a.txt","aaa"),("b.txt","bbb")]:\n        open(os.path.join(d, name), "w").write(content)\n    finder = DuplicateFinder()\n    _result = finder.find_duplicates_optimized(d)`,
+            expectedOutput: `[]`,
             orderIndex: 1,
           },
         ],
@@ -2058,25 +2051,25 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic trace: start and end events",
-            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "foo", "bar"], ["main", "foo"], []])\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
-            expectedOutput: "[('main', 0, 'start', 0), ('foo', 1, 'start', 0), ('bar', 2, 'start', 1), ('bar', 2, 'end', 2), ('foo', 1, 'end', 3), ('main', 0, 'end', 3)]",
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "foo", "bar"], ["main", "foo"], []])\n_result = [[e.function, e.depth, e.event_type, e.timestamp] for e in events]`,
+            expectedOutput: `[["main", 0, "start", 0], ["foo", 1, "start", 0], ["bar", 2, "start", 1], ["bar", 2, "end", 2], ["foo", 1, "end", 3], ["main", 0, "end", 3]]`,
             orderIndex: 0,
           },
           {
             description: "Recursive calls tracked by position",
-            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "solve"], ["main", "solve", "solve"], ["main", "solve"], []])\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
-            expectedOutput: "[('main', 0, 'start', 0), ('solve', 1, 'start', 0), ('solve', 2, 'start', 1), ('solve', 2, 'end', 2), ('solve', 1, 'end', 3), ('main', 0, 'end', 3)]",
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "solve"], ["main", "solve", "solve"], ["main", "solve"], []])\n_result = [[e.function, e.depth, e.event_type, e.timestamp] for e in events]`,
+            expectedOutput: `[["main", 0, "start", 0], ["solve", 1, "start", 0], ["solve", 2, "start", 1], ["solve", 2, "end", 2], ["solve", 1, "end", 3], ["main", 0, "end", 3]]`,
             orderIndex: 1,
           },
           {
             description: "Empty snapshots returns empty list",
-            inputData: `p = Profiler()\nprint(p.convert_to_events([]))`,
-            expectedOutput: "[]",
+            inputData: `p = Profiler()\n_result = p.convert_to_events([])`,
+            expectedOutput: `[]`,
             orderIndex: 2,
           },
           {
             description: "Mid-stream stack swap emits end then start at same depth",
-            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "bar"], []])\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "bar"], []])\n_result = [[e.function, e.depth, e.event_type, e.timestamp] for e in events]`,
             expectedOutput: "[('main', 0, 'start', 0), ('foo', 1, 'start', 0), ('foo', 1, 'end', 1), ('bar', 1, 'start', 1), ('bar', 1, 'end', 2), ('main', 0, 'end', 2)]",
             orderIndex: 3,
           },
@@ -2093,14 +2086,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Denoising filters short-lived functions",
-            inputData: `p = Profiler()\nsnaps = [["main"]] * 5 + [["main", "noise"]] + [["main"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
-            expectedOutput: "[('main', 0, 'start', 0), ('main', 0, 'end', 11)]",
+            inputData: `p = Profiler()\nsnaps = [["main"]] * 5 + [["main", "noise"]] + [["main"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\n_result = [[e.function, e.depth, e.event_type, e.timestamp] for e in events]`,
+            expectedOutput: `[["main", 0, "start", 0], ["main", 0, "end", 11]]`,
             orderIndex: 0,
           },
           {
             description: "Denoising keeps long-lived functions",
-            inputData: `p = Profiler()\nsnaps = [["main", "worker"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\nresult = [(e.function, e.depth, e.event_type, e.timestamp) for e in events]\nprint(result)`,
-            expectedOutput: "[('main', 0, 'start', 0), ('worker', 1, 'start', 0), ('main', 0, 'end', 5), ('worker', 1, 'end', 5)]",
+            inputData: `p = Profiler()\nsnaps = [["main", "worker"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\n_result = [[e.function, e.depth, e.event_type, e.timestamp] for e in events]`,
+            expectedOutput: `[["main", 0, "start", 0], ["worker", 1, "start", 0], ["main", 0, "end", 5], ["worker", 1, "end", 5]]`,
             orderIndex: 1,
           },
         ],
@@ -2131,20 +2124,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic tokenization with longest-match preference",
-            inputData: `t = Tokenizer()\nvocab = {"the", "there", "he", "her", "here", "red"}\nresult = t.tokenize("theredhered", vocab)\nprint(result)`,
-            expectedOutput: "['there', 'd', 'here', 'd']",
+            inputData: `t = Tokenizer()\nvocab = {"the", "there", "he", "her", "here", "red"}\n_result = t.tokenize("theredhered", vocab)`,
+            expectedOutput: `["there", "d", "here", "d"]`,
             orderIndex: 0,
           },
           {
             description: "Unknown characters emitted as single chars",
-            inputData: `t = Tokenizer()\nvocab = {"ab", "cd"}\nresult = t.tokenize("abxcd", vocab)\nprint(result)`,
-            expectedOutput: "['ab', 'x', 'cd']",
+            inputData: `t = Tokenizer()\nvocab = {"ab", "cd"}\n_result = t.tokenize("abxcd", vocab)`,
+            expectedOutput: `["ab", "x", "cd"]`,
             orderIndex: 1,
           },
           {
             description: "Empty text returns empty list",
-            inputData: `t = Tokenizer()\nprint(t.tokenize("", {"a", "b"}))`,
-            expectedOutput: "[]",
+            inputData: `t = Tokenizer()\n_result = t.tokenize("", {"a", "b"})`,
+            expectedOutput: `[]`,
             orderIndex: 2,
           },
         ],
@@ -2160,14 +2153,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Trie tokenizer matches set tokenizer output",
-            inputData: `t = Tokenizer()\nvocab = {"the", "there", "he", "her", "here", "red"}\nresult = t.tokenize_trie("theredhered", vocab)\nprint(result)`,
-            expectedOutput: "['there', 'd', 'here', 'd']",
+            inputData: `t = Tokenizer()\nvocab = {"the", "there", "he", "her", "here", "red"}\n_result = t.tokenize_trie("theredhered", vocab)`,
+            expectedOutput: `["there", "d", "here", "d"]`,
             orderIndex: 0,
           },
           {
             description: "Trie handles unknown chars",
-            inputData: `t = Tokenizer()\nvocab = {"ab", "cd"}\nresult = t.tokenize_trie("abxcd", vocab)\nprint(result)`,
-            expectedOutput: "['ab', 'x', 'cd']",
+            inputData: `t = Tokenizer()\nvocab = {"ab", "cd"}\n_result = t.tokenize_trie("abxcd", vocab)`,
+            expectedOutput: `["ab", "x", "cd"]`,
             orderIndex: 1,
           },
         ],
@@ -2198,26 +2191,26 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic example from problem statement",
-            inputData: `s = CountSmaller()\nprint(s.count_smaller([5, 2, 6, 1]))`,
-            expectedOutput: "[2, 1, 1, 0]",
+            inputData: `s = CountSmaller()\n_result = s.count_smaller([5, 2, 6, 1])`,
+            expectedOutput: `[2, 1, 1, 0]`,
             orderIndex: 0,
           },
           {
             description: "Sorted ascending — all zeros",
-            inputData: `s = CountSmaller()\nprint(s.count_smaller([1, 2, 3, 4]))`,
-            expectedOutput: "[0, 0, 0, 0]",
+            inputData: `s = CountSmaller()\n_result = s.count_smaller([1, 2, 3, 4])`,
+            expectedOutput: `[0, 0, 0, 0]`,
             orderIndex: 1,
           },
           {
             description: "Sorted descending — count all right elements",
-            inputData: `s = CountSmaller()\nprint(s.count_smaller([4, 3, 2, 1]))`,
-            expectedOutput: "[3, 2, 1, 0]",
+            inputData: `s = CountSmaller()\n_result = s.count_smaller([4, 3, 2, 1])`,
+            expectedOutput: `[3, 2, 1, 0]`,
             orderIndex: 2,
           },
           {
             description: "Single element",
-            inputData: `s = CountSmaller()\nprint(s.count_smaller([42]))`,
-            expectedOutput: "[0]",
+            inputData: `s = CountSmaller()\n_result = s.count_smaller([42])`,
+            expectedOutput: `[0]`,
             orderIndex: 3,
           },
         ],
@@ -2233,20 +2226,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Efficient version matches brute force",
-            inputData: `s = CountSmaller()\nprint(s.count_smaller_efficient([5, 2, 6, 1]))`,
-            expectedOutput: "[2, 1, 1, 0]",
+            inputData: `s = CountSmaller()\n_result = s.count_smaller_efficient([5, 2, 6, 1])`,
+            expectedOutput: `[2, 1, 1, 0]`,
             orderIndex: 0,
           },
           {
             description: "Sorted ascending",
-            inputData: `s = CountSmaller()\nprint(s.count_smaller_efficient([1, 2, 3, 4]))`,
-            expectedOutput: "[0, 0, 0, 0]",
+            inputData: `s = CountSmaller()\n_result = s.count_smaller_efficient([1, 2, 3, 4])`,
+            expectedOutput: `[0, 0, 0, 0]`,
             orderIndex: 1,
           },
           {
             description: "Sorted descending",
-            inputData: `s = CountSmaller()\nprint(s.count_smaller_efficient([4, 3, 2, 1]))`,
-            expectedOutput: "[3, 2, 1, 0]",
+            inputData: `s = CountSmaller()\n_result = s.count_smaller_efficient([4, 3, 2, 1])`,
+            expectedOutput: `[3, 2, 1, 0]`,
             orderIndex: 2,
           },
         ],
@@ -2277,20 +2270,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic set/get/delete/count",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 42)\nprint(db.get("x"))\nprint(db.count())\nprint(db.delete("x"))\nprint(db.get("x"))\nprint(db.count())`,
-            expectedOutput: "42\n1\nTrue\nNone\n0",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 42)\n_result = [db.get("x"), db.count(), db.delete("x"), db.get("x"), db.count()]`,
+            expectedOutput: `[42, 1, true, null, 0]`,
             orderIndex: 0,
           },
           {
             description: "Delete non-existent key returns False",
-            inputData: `db = InMemoryDatabase()\nprint(db.delete("missing"))`,
-            expectedOutput: "False",
+            inputData: `db = InMemoryDatabase()\n_result = db.delete("missing")`,
+            expectedOutput: `false`,
             orderIndex: 1,
           },
           {
             description: "Overwrite existing key",
-            inputData: `db = InMemoryDatabase()\ndb.set("k", "v1")\ndb.set("k", "v2")\nprint(db.get("k"))\nprint(db.count())`,
-            expectedOutput: "v2\n1",
+            inputData: `db = InMemoryDatabase()\ndb.set("k", "v1")\ndb.set("k", "v2")\n_result = [db.get("k"), db.count()]`,
+            expectedOutput: `["v2", 1]`,
             orderIndex: 2,
           },
         ],
@@ -2306,14 +2299,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "History tracks all values",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.set("x", 2)\ndb.set("x", 3)\nh = db.history("x")\nprint(len(h) == 3)\nprint([v for _, v in h] == [1, 2, 3])`,
-            expectedOutput: "True\nTrue",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.set("x", 2)\ndb.set("x", 3)\nh = db.history("x")\n_result = [len(h) == 3, [v for _, v in h] == [1, 2, 3]]`,
+            expectedOutput: `[true, true]`,
             orderIndex: 0,
           },
           {
             description: "modified_since returns correct keys",
-            inputData: `db = InMemoryDatabase()\ndb.set("a", 1)  # ts=1\ndb.set("b", 2)  # ts=2\nresult = db.modified_since(1)\nprint("b" in result)\nprint("a" not in result)`,
-            expectedOutput: "True\nTrue",
+            inputData: `db = InMemoryDatabase()\ndb.set("a", 1)\ndb.set("b", 2)\nresult = db.modified_since(1)\n_result = ["b" in result, "a" not in result]`,
+            expectedOutput: `[true, true]`,
             orderIndex: 1,
           },
         ],
@@ -2329,20 +2322,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Lock prevents write by other caller",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\nprint(db.set("x", 2, caller_id="bob"))\nprint(db.get("x"))`,
-            expectedOutput: "False\n1",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\n_result = [db.set("x", 2, caller_id="bob"), db.get("x")]`,
+            expectedOutput: `[false, 1]`,
             orderIndex: 0,
           },
           {
             description: "Lock holder can write",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\nprint(db.set("x", 99, caller_id="alice"))\nprint(db.get("x"))`,
-            expectedOutput: "True\n99",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\n_result = [db.set("x", 99, caller_id="alice"), db.get("x")]`,
+            expectedOutput: `[true, 99]`,
             orderIndex: 1,
           },
           {
             description: "Unlock allows anyone to write",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\ndb.unlock("x", "alice")\nprint(db.set("x", 5))\nprint(db.get("x"))`,
-            expectedOutput: "True\n5",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\ndb.unlock("x", "alice")\n_result = [db.set("x", 5), db.get("x")]`,
+            expectedOutput: `[true, 5]`,
             orderIndex: 2,
           },
         ],
@@ -2358,20 +2351,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Rollback restores previous value",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.begin("alice")\ndb.set("x", 99, caller_id="alice")\nprint(db.get("x"))\ndb.rollback("alice")\nprint(db.get("x"))`,
-            expectedOutput: "99\n1",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.begin("alice")\ndb.set("x", 99, caller_id="alice")\nbefore = db.get("x")\ndb.rollback("alice")\nafter = db.get("x")\n_result = [before, after]`,
+            expectedOutput: `[99, 1]`,
             orderIndex: 0,
           },
           {
             description: "Commit makes changes permanent",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.begin("alice")\ndb.set("x", 99, caller_id="alice")\ndb.commit("alice")\nprint(db.get("x"))\nprint(db.begin("alice"))`,
-            expectedOutput: "99\nTrue",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.begin("alice")\ndb.set("x", 99, caller_id="alice")\ndb.commit("alice")\n_result = [db.get("x"), db.begin("alice")]`,
+            expectedOutput: `[99, true]`,
             orderIndex: 1,
           },
           {
             description: "Rollback of delete restores key",
-            inputData: `db = InMemoryDatabase()\ndb.set("x", 42)\ndb.begin("bob")\ndb.delete("x", caller_id="bob")\nprint(db.get("x"))\ndb.rollback("bob")\nprint(db.get("x"))`,
-            expectedOutput: "None\n42",
+            inputData: `db = InMemoryDatabase()\ndb.set("x", 42)\ndb.begin("bob")\ndb.delete("x", caller_id="bob")\nbefore = db.get("x")\ndb.rollback("bob")\nafter = db.get("x")\n_result = [before, after]`,
+            expectedOutput: `[null, 42]`,
             orderIndex: 2,
           },
         ],
@@ -2402,20 +2395,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic deposit and withdraw",
-            inputData: `bank = BankSystem()\nbank.create("alice")\nprint(bank.deposit("alice", 100))\nprint(bank.withdraw("alice", 30))\nprint(bank.balance("alice"))`,
-            expectedOutput: "100.0\n70.0\n70.0",
+            inputData: `bank = BankSystem()\nbank.create("alice")\n_result = [bank.deposit("alice", 100), bank.withdraw("alice", 30), bank.balance("alice")]`,
+            expectedOutput: `[100.0, 70.0, 70.0]`,
             orderIndex: 0,
           },
           {
             description: "Withdraw fails on insufficient funds",
-            inputData: `bank = BankSystem()\nbank.create("alice")\nbank.deposit("alice", 50)\nprint(bank.withdraw("alice", 100))`,
-            expectedOutput: "None",
+            inputData: `bank = BankSystem()\nbank.create("alice")\nbank.deposit("alice", 50)\n_result = bank.withdraw("alice", 100)`,
+            expectedOutput: `null`,
             orderIndex: 1,
           },
           {
             description: "Create duplicate returns False",
-            inputData: `bank = BankSystem()\nprint(bank.create("alice"))\nprint(bank.create("alice"))`,
-            expectedOutput: "True\nFalse",
+            inputData: `bank = BankSystem()\n_result = [bank.create("alice"), bank.create("alice")]`,
+            expectedOutput: `[true, false]`,
             orderIndex: 2,
           },
         ],
@@ -2431,20 +2424,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Successful transfer",
-            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nbank.create("bob"); bank.deposit("bob", 0)\nprint(bank.transfer("alice", "bob", 40))\nprint(bank.balance("alice"))\nprint(bank.balance("bob"))`,
-            expectedOutput: "True\n60.0\n40.0",
+            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nbank.create("bob"); bank.deposit("bob", 0)\n_result = [bank.transfer("alice", "bob", 40), bank.balance("alice"), bank.balance("bob")]`,
+            expectedOutput: `[true, 60.0, 40.0]`,
             orderIndex: 0,
           },
           {
             description: "Transfer fails on insufficient funds",
-            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 10)\nbank.create("bob")\nprint(bank.transfer("alice", "bob", 50))\nprint(bank.balance("alice"))`,
-            expectedOutput: "False\n10.0",
+            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 10)\nbank.create("bob")\n_result = [bank.transfer("alice", "bob", 50), bank.balance("alice")]`,
+            expectedOutput: `[false, 10.0]`,
             orderIndex: 1,
           },
           {
             description: "Transfer fails for unknown account",
-            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nprint(bank.transfer("alice", "ghost", 10))`,
-            expectedOutput: "False",
+            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\n_result = bank.transfer("alice", "ghost", 10)`,
+            expectedOutput: `false`,
             orderIndex: 2,
           },
         ],
@@ -2460,20 +2453,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Merge combines balances",
-            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nbank.create("bob"); bank.deposit("bob", 50)\nbank.merge("alice", "bob")\nprint(bank.balance("bob"))\nprint(bank.balance("alice"))`,
-            expectedOutput: "150.0\n150.0",
+            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nbank.create("bob"); bank.deposit("bob", 50)\nbank.merge("alice", "bob")\n_result = [bank.balance("bob"), bank.balance("alice")]`,
+            expectedOutput: `[150.0, 150.0]`,
             orderIndex: 0,
           },
           {
             description: "Operations on merged account redirect to target",
-            inputData: `bank = BankSystem()\nbank.create("a"); bank.deposit("a", 100)\nbank.create("b"); bank.deposit("b", 50)\nbank.merge("a", "b")\nprint(bank.deposit("a", 10))\nprint(bank.balance("b"))`,
-            expectedOutput: "160.0\n160.0",
+            inputData: `bank = BankSystem()\nbank.create("a"); bank.deposit("a", 100)\nbank.create("b"); bank.deposit("b", 50)\nbank.merge("a", "b")\n_result = [bank.deposit("a", 10), bank.balance("b")]`,
+            expectedOutput: `[160.0, 160.0]`,
             orderIndex: 1,
           },
           {
             description: "Chained merges resolve correctly",
-            inputData: `bank = BankSystem()\nfor aid in ["a","b","c"]:\n    bank.create(aid); bank.deposit(aid, 10)\nbank.merge("a", "b")\nbank.merge("b", "c")\nprint(bank.balance("a"))\nprint(bank.balance("c"))`,
-            expectedOutput: "30.0\n30.0",
+            inputData: `bank = BankSystem()\nfor aid in ["a","b","c"]:\n    bank.create(aid); bank.deposit(aid, 10)\nbank.merge("a", "b")\nbank.merge("b", "c")\n_result = [bank.balance("a"), bank.balance("c")]`,
+            expectedOutput: `[30.0, 30.0]`,
             orderIndex: 2,
           },
         ],
@@ -2489,20 +2482,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Top spenders returns correct ranking",
-            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 200)\nbank.create("bob"); bank.deposit("bob", 100)\nbank.withdraw("alice", 50)\nbank.withdraw("bob", 80)\nresult = bank.top_spenders(2)\nprint(result[0][0])\nprint(result[1][0])`,
-            expectedOutput: "bob\nalice",
+            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 200)\nbank.create("bob"); bank.deposit("bob", 100)\nbank.withdraw("alice", 50)\nbank.withdraw("bob", 80)\nresult = bank.top_spenders(2)\n_result = [result[0][0], result[1][0]]`,
+            expectedOutput: `["bob", "alice"]`,
             orderIndex: 0,
           },
           {
             description: "Cashback credits accounts with outgoing",
-            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nbank.withdraw("alice", 40)\nbal_before = bank.balance("alice")\nbank.cashback(10)\nbal_after = bank.balance("alice")\nprint(round(bal_after - bal_before, 2))`,
-            expectedOutput: "4.0",
+            inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nbank.withdraw("alice", 40)\nbal_before = bank.balance("alice")\nbank.cashback(10)\nbal_after = bank.balance("alice")\n_result = round(bal_after - bal_before, 2)`,
+            expectedOutput: `4.0`,
             orderIndex: 1,
           },
           {
             description: "Cashback returns count of credited accounts",
-            inputData: `bank = BankSystem()\nfor aid in ["a","b","c"]:\n    bank.create(aid); bank.deposit(aid, 100)\nbank.withdraw("a", 10)\nbank.withdraw("b", 20)\ncount = bank.cashback(5)\nprint(count)`,
-            expectedOutput: "2",
+            inputData: `bank = BankSystem()\nfor aid in ["a","b","c"]:\n    bank.create(aid); bank.deposit(aid, 100)\nbank.withdraw("a", 10)\nbank.withdraw("b", 20)\n_result = bank.cashback(5)`,
+            expectedOutput: `2`,
             orderIndex: 2,
           },
         ],
@@ -2533,20 +2526,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic LRU eviction",
-            inputData: `cache = LRUCache(capacity=2)\ncache.put(1, 10)\ncache.put(2, 20)\nprint(cache.get(1))\ncache.put(3, 30)\nprint(cache.get(2))\nprint(cache.get(3))`,
-            expectedOutput: "10\n-1\n30",
+            inputData: `cache = LRUCache(capacity=2)\ncache.put(1, 10)\ncache.put(2, 20)\nv1 = cache.get(1)\ncache.put(3, 30)\n_result = [v1, cache.get(2), cache.get(3)]`,
+            expectedOutput: `[10, -1, 30]`,
             orderIndex: 0,
           },
           {
             description: "Update existing key does not evict",
-            inputData: `cache = LRUCache(capacity=2)\ncache.put(1, 1)\ncache.put(2, 2)\ncache.put(1, 10)\ncache.put(3, 3)\nprint(cache.get(1))\nprint(cache.get(2))`,
-            expectedOutput: "10\n-1",
+            inputData: `cache = LRUCache(capacity=2)\ncache.put(1, 1)\ncache.put(2, 2)\ncache.put(1, 10)\ncache.put(3, 3)\n_result = [cache.get(1), cache.get(2)]`,
+            expectedOutput: `[10, -1]`,
             orderIndex: 1,
           },
           {
             description: "Get missing key returns -1",
-            inputData: `cache = LRUCache(capacity=3)\nprint(cache.get(99))`,
-            expectedOutput: "-1",
+            inputData: `cache = LRUCache(capacity=3)\n_result = cache.get(99)`,
+            expectedOutput: `-1`,
             orderIndex: 2,
           },
         ],
@@ -2562,20 +2555,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "TTL entry accessible before expiry",
-            inputData: `cache = LRUCache(capacity=3)\ncache.put_with_ttl(1, 100, ttl=60.0)\nprint(cache.get_with_ttl(1))`,
-            expectedOutput: "100",
+            inputData: `cache = LRUCache(capacity=3)\ncache.put_with_ttl(1, 100, ttl=60.0)\n_result = cache.get_with_ttl(1)`,
+            expectedOutput: `100`,
             orderIndex: 0,
           },
           {
             description: "TTL entry returns -1 after expiry",
-            inputData: `import time\ncache = LRUCache(capacity=3)\ncache.put_with_ttl(1, 100, ttl=0.01)\ntime.sleep(0.05)\nprint(cache.get_with_ttl(1))`,
-            expectedOutput: "-1",
+            inputData: `import time\ncache = LRUCache(capacity=3)\ncache.put_with_ttl(1, 100, ttl=0.01)\ntime.sleep(0.05)\n_result = cache.get_with_ttl(1)`,
+            expectedOutput: `-1`,
             orderIndex: 1,
           },
           {
             description: "TTL and regular cache are independent",
-            inputData: `cache = LRUCache(capacity=2)\ncache.put(1, 10)\ncache.put_with_ttl(2, 20, ttl=60.0)\nprint(cache.get(1))\nprint(cache.get_with_ttl(2))`,
-            expectedOutput: "10\n20",
+            inputData: `cache = LRUCache(capacity=2)\ncache.put(1, 10)\ncache.put_with_ttl(2, 20, ttl=60.0)\n_result = [cache.get(1), cache.get_with_ttl(2)]`,
+            expectedOutput: `[10, 20]`,
             orderIndex: 2,
           },
         ],
@@ -2591,20 +2584,20 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "get_highest_priority returns highest pending task",
-            inputData: `tm = TaskManager()\ntm.add_task("t1", "Low", priority=1)\ntm.add_task("t2", "High", priority=10)\ntm.add_task("t3", "Mid", priority=5)\nresult = tm.get_highest_priority()\nprint(result.task_id)\nprint(result.priority)`,
-            expectedOutput: "t2\n10",
+            inputData: `tm = TaskManager()\ntm.add_task("t1", "Low", priority=1)\ntm.add_task("t2", "High", priority=10)\ntm.add_task("t3", "Mid", priority=5)\nresult = tm.get_highest_priority()\n_result = [result.task_id, result.priority]`,
+            expectedOutput: `["t2", 10]`,
             orderIndex: 0,
           },
           {
             description: "Completed tasks are skipped",
-            inputData: `tm = TaskManager()\ntm.add_task("t1", "A", priority=10)\ntm.add_task("t2", "B", priority=5)\ntm.complete_task("t1")\nresult = tm.get_highest_priority()\nprint(result.task_id)`,
-            expectedOutput: "t2",
+            inputData: `tm = TaskManager()\ntm.add_task("t1", "A", priority=10)\ntm.add_task("t2", "B", priority=5)\ntm.complete_task("t1")\n_result = tm.get_highest_priority().task_id`,
+            expectedOutput: `"t2"`,
             orderIndex: 1,
           },
           {
             description: "list_tasks with status filter",
-            inputData: `tm = TaskManager()\ntm.add_task("t1", "A", priority=3)\ntm.add_task("t2", "B", priority=7)\ntm.complete_task("t1")\npending = tm.list_tasks(status="pending")\nprint(len(pending))\nprint(pending[0].task_id)`,
-            expectedOutput: "1\nt2",
+            inputData: `tm = TaskManager()\ntm.add_task("t1", "A", priority=3)\ntm.add_task("t2", "B", priority=7)\ntm.complete_task("t1")\npending = tm.list_tasks(status="pending")\n_result = [len(pending), pending[0].task_id]`,
+            expectedOutput: `[1, "t2"]`,
             orderIndex: 2,
           },
         ],
