@@ -2043,14 +2043,14 @@ export async function runStagedSeed() {
       title: "Stack Trace Profiler",
       difficulty: "Hard",
       tags: "stack,diffing,profiling",
-      description: `## Stack Trace Profiler\n\n**Difficulty:** Hard | **Type:** Algorithms / Diffing\n\nA sampling profiler takes periodic snapshots of the call stack. Convert these snapshots into start/end trace events.\n\n### Stage 1: Basic Trace Events\n\nConvert stack snapshots to trace events. Track by **position**, not name — this handles recursion.\n\n### Stage 2: Denoising Filter\n\nAdd \`convert_with_denoising(snapshots, min_samples=3)\` that filters out functions appearing for fewer than N consecutive samples.\n\n**Key insight:** Track by POSITION, not NAME. This is the core insight that separates pass from fail on recursive inputs.`,
+      description: `## Stack Trace Profiler\n\n**Difficulty:** Hard | **Type:** Algorithms / Diffing\n\nA sampling profiler takes periodic snapshots of the call stack. Convert these snapshots into start/end trace events.\n\n### TraceEvent fields\n\n- \`timestamp\` — the snapshot index (0-based) at which the event occurs\n- \`function\` — the name of the function\n- \`depth\` — the 0-based position in the stack (0 = outermost/bottom frame, higher = deeper/inner)\n- \`event_type\` — \`"start"\` when the function enters, \`"end"\` when it exits\n\n### Stage 1: Basic Trace Events\n\nConvert stack snapshots to trace events. Track by **position (depth)**, not name — this handles recursion correctly.\n\n### Stage 2: Denoising Filter\n\nAdd \`convert_with_denoising(snapshots, min_samples=3)\` that filters out functions appearing for fewer than N consecutive samples.\n\n**Key insight:** Track by POSITION, not NAME. This is the core insight that separates pass from fail on recursive inputs.`,
       starterCode: PROFILER_STARTER_S1,
     },
     [
       {
         stageNumber: 1,
         title: "Trace Events",
-        description: `## Stage 1: Stack Snapshot → Trace Events\n\nImplement \`convert_to_events(snapshots)\`.\n\nEach snapshot is a list of function names from bottom to top (index 0 = outermost frame).\n\n**Algorithm:**\n1. Compare consecutive snapshots to find the divergence point (\`common_depth\`)\n2. Emit END events top-down (deepest exits first)\n3. Emit START events bottom-up (shallowest enters first)\n4. After all snapshots, emit END for everything still on the stack\n\n**Critical:** Track by POSITION, not name. Recursive calls to \`solve\` at depth 1 and depth 2 are different events.\n\n\`\`\`\nt=0: ["main", "foo"]        → start main(0), start foo(1)\nt=1: ["main", "foo", "bar"] → start bar(2)\nt=2: ["main", "foo"]        → end bar(2)\nt=3: []                     → end foo(1), end main(0)\n\`\`\``,
+        description: `## Stage 1: Stack Snapshot → Trace Events\n\nImplement \`convert_to_events(snapshots)\`.\n\nEach snapshot is a list of function names ordered by **depth**: index 0 is the outermost (bottom) frame, higher indices are deeper (inner) frames.\n\n**TraceEvent fields:** \`timestamp\` (snapshot index), \`function\` (name), \`depth\` (0-based position in stack), \`event_type\` ("start" or "end").\n\n**Algorithm:**\n1. Compare consecutive snapshots to find the divergence point (\`common_depth\`)\n2. Emit END events top-down (deepest exits first)\n3. Emit START events bottom-up (shallowest enters first)\n4. After all snapshots, emit END for everything still on the stack\n\n**Critical:** Track by POSITION (depth), not name. Recursive calls to \`solve\` at depth 1 and depth 2 are different events.\n\n\`\`\`\nt=0: ["main", "foo"]        → start main(depth=0, t=0), start foo(depth=1, t=0)\nt=1: ["main", "foo", "bar"] → start bar(depth=2, t=1)\nt=2: ["main", "foo"]        → end bar(depth=2, t=2)\nt=3: []                     → end foo(depth=1, t=3), end main(depth=0, t=3)\n\`\`\``,
         baseClass: PROFILER_BASE_S1,
         starterCode: PROFILER_STARTER_S1,
         solution: PROFILER_SOL_S1,
@@ -2058,14 +2058,14 @@ export async function runStagedSeed() {
         testCases: [
           {
             description: "Basic trace: start and end events",
-            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "foo", "bar"], ["main", "foo"], []])\nstarts = [(e.function, e.depth, e.event_type) for e in events if e.event_type == "start"]\nends = [(e.function, e.depth, e.event_type) for e in events if e.event_type == "end"]\nprint(("main", 0, "start") in starts)\nprint(("foo", 1, "start") in starts)\nprint(("bar", 2, "start") in starts)\nprint(("bar", 2, "end") in ends)`,
-            expectedOutput: "True\nTrue\nTrue\nTrue",
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "foo", "bar"], ["main", "foo"], []])\nby_key = {(e.function, e.depth, e.event_type): e.timestamp for e in events}\nprint(by_key.get(("main", 0, "start")))\nprint(by_key.get(("foo", 1, "start")))\nprint(by_key.get(("bar", 2, "start")))\nprint(by_key.get(("bar", 2, "end")))\nprint(by_key.get(("foo", 1, "end")))\nprint(by_key.get(("main", 0, "end")))`,
+            expectedOutput: "0\n0\n1\n2\n3\n3",
             orderIndex: 0,
           },
           {
             description: "Recursive calls tracked by position",
-            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "solve"], ["main", "solve", "solve"], ["main", "solve"], []])\nstarts = [(e.function, e.depth) for e in events if e.event_type == "start"]\nprint(("solve", 1) in starts)\nprint(("solve", 2) in starts)`,
-            expectedOutput: "True\nTrue",
+            inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "solve"], ["main", "solve", "solve"], ["main", "solve"], []])\nby_key = {(e.function, e.depth, e.event_type): e.timestamp for e in events}\nprint(by_key.get(("solve", 1, "start")))\nprint(by_key.get(("solve", 2, "start")))\nprint(by_key.get(("solve", 2, "end")))\nprint(by_key.get(("solve", 1, "end")))`,
+            expectedOutput: "0\n1\n2\n3",
             orderIndex: 1,
           },
           {
