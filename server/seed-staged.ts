@@ -234,33 +234,36 @@ class RateLimiter(RateLimiterBase):
     def __init__(self, max_requests: int, window_seconds: float):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests = defaultdict(deque)
+        # defaultdict(deque) auto-creates an empty deque for each new user_id on first access
+        self.requests = defaultdict(deque)  # user_id -> deque of request timestamps
 
     def allow_request(self, user_id: str) -> bool:
         now = time.time()
-        cutoff = now - self.window_seconds
-        ts = self.requests[user_id]
+        cutoff = now - self.window_seconds  # timestamps at or before this are outside the window
+        ts = self.requests[user_id]         # O(1) lookup; empty deque created if new user
+        # Evict expired timestamps from the front (oldest end) of the deque
         while ts and ts[0] <= cutoff:
-            ts.popleft()
-        if len(ts) < self.max_requests:
-            ts.append(now)
+            ts.popleft()                    # O(1) per removal
+        if len(ts) < self.max_requests:     # quota not yet exhausted for this window
+            ts.append(now)                  # record this request timestamp
             return True
-        return False
+        return False                        # too many requests in the current window
 `;
 
 const RATE_LIMITER_SOL_S2 = RATE_LIMITER_SOL_S1 + `
     def cleanup(self) -> int:
         now = time.time()
-        removed = 0
+        removed = 0  # count of users whose entry was fully pruned
+        # Iterate over a snapshot of keys so we can safely delete during iteration
         for uid in list(self.requests.keys()):
             cutoff = now - self.window_seconds
             ts = self.requests[uid]
             while ts and ts[0] <= cutoff:
                 ts.popleft()
-            if not ts:
+            if not ts:                   # no recent requests — safe to remove the entry
                 del self.requests[uid]
                 removed += 1
-        return removed
+        return removed                   # callers can log how much memory was freed
 `;
 
 const RATE_LIMITER_SOL_S3 = `\
@@ -272,12 +275,14 @@ class RateLimiter(RateLimiterBase):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests = defaultdict(deque)
-        self._global_lock = threading.Lock()
-        self._user_locks: dict = {}
+        self._global_lock = threading.Lock()  # guards the _user_locks dict itself
+        self._user_locks: dict = {}            # per-user locks, created lazily
 
     def _get_user_lock(self, user_id: str) -> threading.Lock:
-        if user_id not in self._user_locks:
-            with self._global_lock:
+        if user_id not in self._user_locks:    # fast path: no locking needed if already exists
+            with self._global_lock:            # serialize creation of new per-user locks
+                # Double-checked locking: re-test after acquiring the global lock because
+                # another thread may have created it between our check and the acquire
                 if user_id not in self._user_locks:
                     self._user_locks[user_id] = threading.Lock()
         return self._user_locks[user_id]
@@ -308,7 +313,7 @@ class RateLimiter(RateLimiterBase):
 
     def allow_request_thread_safe(self, user_id: str) -> bool:
         now = time.time()
-        with self._get_user_lock(user_id):
+        with self._get_user_lock(user_id):  # per-user lock: different users run concurrently
             cutoff = now - self.window_seconds
             ts = self.requests[user_id]
             while ts and ts[0] <= cutoff:
@@ -397,53 +402,59 @@ from typing import List
 
 class DuplicateFinder(DuplicateFinderBase):
     def find_duplicates(self, root_dir: str) -> List[List[str]]:
-        hash_to_paths = defaultdict(list)
+        hash_to_paths = defaultdict(list)  # md5_hex -> [path1, path2, ...]
         for dirpath, _, filenames in os.walk(root_dir):
             for fname in filenames:
                 fpath = os.path.join(dirpath, fname)
-                if not os.path.isfile(fpath):
+                if not os.path.isfile(fpath):  # skip symlinks and directories
                     continue
                 try:
                     h = hashlib.md5()
                     with open(fpath, 'rb') as f:
+                        # Stream in 8 KB chunks — avoids loading large files into memory
                         while chunk := f.read(8192):
                             h.update(chunk)
-                    hash_to_paths[h.hexdigest()].append(fpath)
+                    hash_to_paths[h.hexdigest()].append(fpath)  # group by content fingerprint
                 except (PermissionError, OSError):
-                    continue
+                    continue  # skip unreadable files gracefully
+        # Only return groups with 2+ files — single-file hashes are not duplicates
         return [g for g in hash_to_paths.values() if len(g) >= 2]
 `;
 
 const DUP_SOL_S2 = DUP_SOL_S1 + `
     def find_duplicates_optimized(self, root_dir: str) -> List[List[str]]:
-        size_to_paths = defaultdict(list)
+        # Pass 1: group by file size — files of different sizes can't be identical
+        size_to_paths = defaultdict(list)  # size_bytes -> [paths]
         for dirpath, _, filenames in os.walk(root_dir):
             for fname in filenames:
                 fpath = os.path.join(dirpath, fname)
                 if not os.path.isfile(fpath):
                     continue
                 try:
-                    size_to_paths[os.path.getsize(fpath)].append(fpath)
+                    size_to_paths[os.path.getsize(fpath)].append(fpath)  # O(1) stat call
                 except (PermissionError, OSError):
                     continue
+        # Eliminate size groups with only one file — they can't have duplicates
         candidates = {s: p for s, p in size_to_paths.items() if len(p) >= 2}
-        partial_groups = defaultdict(list)
+        # Pass 2: partial hash — sample beginning + middle + end to avoid full reads
+        partial_groups = defaultdict(list)  # (size, partial_hex) -> [paths]
         for size, paths in candidates.items():
             for fpath in paths:
                 try:
                     h = hashlib.md5()
                     with open(fpath, 'rb') as f:
-                        h.update(f.read(4096))
-                        if size > 4096 * 3:
+                        h.update(f.read(4096))           # first 4 KB
+                        if size > 4096 * 3:              # only sample middle/end for large files
                             f.seek(size // 2)
-                            h.update(f.read(4096))
-                            f.seek(-4096, 2)
-                            h.update(f.read(4096))
+                            h.update(f.read(4096))       # middle 4 KB
+                            f.seek(-4096, 2)             # seek 4 KB from end of file
+                            h.update(f.read(4096))       # last 4 KB
                     partial_groups[(size, h.hexdigest())].append(fpath)
                 except (PermissionError, OSError):
                     continue
+        # Pass 3: full hash only for files that survived both previous filters
         candidates2 = {k: p for k, p in partial_groups.items() if len(p) >= 2}
-        full_groups = defaultdict(list)
+        full_groups = defaultdict(list)  # full_md5_hex -> [paths]
         for _, paths in candidates2.items():
             for fpath in paths:
                 try:
@@ -547,20 +558,25 @@ from typing import List
 class Profiler(ProfilerBase):
     def convert_to_events(self, snapshots: List[List[str]]) -> List[TraceEvent]:
         events = []
-        prev_stack = []
+        prev_stack = []  # the call stack at the previous timestamp
         for t, curr_stack in enumerate(snapshots):
-            common_depth = 0
+            # Find the divergence point: how many frames from the top are identical
+            common_depth = 0  # number of shared prefix frames between prev and curr
             for i in range(min(len(prev_stack), len(curr_stack))):
                 if prev_stack[i] == curr_stack[i]:
-                    common_depth = i + 1
+                    common_depth = i + 1  # this frame is still the same function at this depth
                 else:
-                    break
+                    break  # first mismatch — everything below this depth diverged
+            # Emit END events for frames that left the stack, deepest first (LIFO order)
             for i in range(len(prev_stack) - 1, common_depth - 1, -1):
                 events.append(TraceEvent(t, prev_stack[i], i, "end"))
+            # Emit START events for frames that entered the stack, shallowest first
             for i in range(common_depth, len(curr_stack)):
                 events.append(TraceEvent(t, curr_stack[i], i, "start"))
-            prev_stack = list(curr_stack)
-        for i in range(len(prev_stack) - 1, -1, -1):
+            prev_stack = list(curr_stack)  # advance: curr becomes prev for next iteration
+        # Flush: functions still on the stack at the end never got an END event from the main loop
+        # Timestamp = len(snapshots) — one tick past the last snapshot
+        for i in range(len(prev_stack) - 1, -1, -1):  # deepest frame ends first
             events.append(TraceEvent(len(snapshots), prev_stack[i], i, "end"))
         return events
 `;
@@ -568,27 +584,32 @@ class Profiler(ProfilerBase):
 const PROFILER_SOL_S2 = PROFILER_SOL_S1 + `
     def convert_with_denoising(self, snapshots: List[List[str]], min_samples: int = 3) -> List[TraceEvent]:
         events = []
-        max_depth = max((len(s) for s in snapshots), default=0)
-        confirmed_spans = []
+        max_depth = max((len(s) for s in snapshots), default=0)  # deepest stack seen
+        confirmed_spans = []  # (depth, func, start_t, end_t) for spans that pass the filter
+        # Scan each depth level independently — functions at the same depth don't overlap
         for depth in range(max_depth):
-            run_func = None
-            run_start = 0
-            run_count = 0
+            run_func = None   # function currently being tracked at this depth
+            run_start = 0     # snapshot index where the current run began
+            run_count = 0     # consecutive snapshots the current function has appeared
             for t, stack in enumerate(snapshots):
-                curr = stack[depth] if depth < len(stack) else None
+                curr = stack[depth] if depth < len(stack) else None  # None if stack is shallower
                 if curr == run_func and curr is not None:
-                    run_count += 1
+                    run_count += 1  # same function continues — extend the run
                 else:
+                    # Run ended — check if it was long enough to keep
                     if run_func is not None and run_count >= min_samples:
                         confirmed_spans.append((depth, run_func, run_start, t))
                     run_func = curr
                     run_start = t
                     run_count = 1 if curr is not None else 0
+            # Handle a run that extends all the way to the last snapshot
             if run_func is not None and run_count >= min_samples:
                 confirmed_spans.append((depth, run_func, run_start, len(snapshots)))
         for depth, func, start_t, end_t in confirmed_spans:
             events.append(TraceEvent(start_t, func, depth, "start"))
             events.append(TraceEvent(end_t, func, depth, "end"))
+        # Sort: by timestamp, then ENDs before STARTs at the same tick,
+        # then shallowest-first for starts and deepest-first for ends
         events.sort(key=lambda e: (e.timestamp, 0 if e.event_type == "end" else 1,
                                     e.depth if e.event_type == "start" else -e.depth))
         return events
@@ -696,19 +717,21 @@ class Tokenizer(TokenizerBase):
     def tokenize(self, text: str, vocab: Set[str]) -> List[str]:
         if not text:
             return []
-        max_len = max(len(w) for w in vocab) if vocab else 0
+        # Pre-compute the longest vocab word length to bound the inner loop
+        max_len = max(len(w) for w in vocab) if vocab else 0  # O(|vocab|) once
         tokens = []
         i = 0
         while i < len(text):
             matched = False
+            # Try longest possible match first (greedy), shrink until we find a vocab word
             for length in range(min(max_len, len(text) - i), 0, -1):
                 if text[i:i + length] in vocab:
                     tokens.append(text[i:i + length])
                     i += length
                     matched = True
-                    break
-            if not matched:
-                tokens.append(text[i])
+                    break  # take the longest match and advance
+            if not matched:             # no vocab word starts here
+                tokens.append(text[i])  # emit the single unknown character as its own token
                 i += 1
         return tokens
 `;
@@ -718,63 +741,65 @@ from typing import List, Set
 
 class Trie:
     def __init__(self):
-        self.children = {}
-        self.is_end = False
-        self.word = None
+        self.children = {}   # char -> child Trie node
+        self.is_end = False  # True if a vocab word ends at this node
+        self.word = None     # the full word stored at this terminal node
 
     def insert(self, word: str):
         node = self
         for ch in word:
             if ch not in node.children:
-                node.children[ch] = Trie()
+                node.children[ch] = Trie()  # create child node on demand
             node = node.children[ch]
-        node.is_end = True
-        node.word = word
+        node.is_end = True   # mark the end of this word
+        node.word = word     # store the full word for O(1) retrieval at match time
 
     def longest_match(self, text: str, start: int):
         node = self
-        best = None
+        best = None  # best (longest) vocab word found so far
         for i in range(start, len(text)):
             if text[i] not in node.children:
-                break
-            node = node.children[text[i]]
+                break  # no vocab word can extend further from this point
+            node = node.children[text[i]]  # follow the trie edge
             if node.is_end:
-                best = node.word
+                best = node.word  # update best — keep going to find an even longer match
         return best
 
 class Tokenizer(TokenizerBase):
     def tokenize(self, text: str, vocab: Set[str]) -> List[str]:
         if not text:
             return []
-        max_len = max(len(w) for w in vocab) if vocab else 0
+        # Pre-compute the longest vocab word length to bound the inner loop
+        max_len = max(len(w) for w in vocab) if vocab else 0  # O(|vocab|) once
         tokens = []
         i = 0
         while i < len(text):
             matched = False
+            # Try longest possible match first (greedy), shrink until we find a vocab word
             for length in range(min(max_len, len(text) - i), 0, -1):
                 if text[i:i + length] in vocab:
                     tokens.append(text[i:i + length])
                     i += length
                     matched = True
-                    break
-            if not matched:
-                tokens.append(text[i])
+                    break  # take the longest match and advance
+            if not matched:             # no vocab word starts here
+                tokens.append(text[i])  # emit the single unknown character as its own token
                 i += 1
         return tokens
 
     def tokenize_trie(self, text: str, vocab: Set[str]) -> List[str]:
-        trie = Trie()
+        trie = Trie()  # build once per call; in production you'd cache this
         for word in vocab:
             trie.insert(word)
         tokens = []
         i = 0
         while i < len(text):
-            match = trie.longest_match(text, i)
+            match = trie.longest_match(text, i)  # O(L) where L = actual match length
             if match:
                 tokens.append(match)
                 i += len(match)
             else:
-                tokens.append(text[i])
+                tokens.append(text[i])  # unknown character — emit as single-char token
                 i += 1
         return tokens
 `;
@@ -844,10 +869,10 @@ from typing import List
 class CountSmaller(CountSmallerBase):
     def count_smaller(self, nums: List[int]) -> List[int]:
         n = len(nums)
-        result = [0] * n
+        result = [0] * n  # result[i] = count of elements to the right of i that are smaller
         for i in range(n):
             for j in range(i + 1, n):
-                if nums[j] < nums[i]:
+                if nums[j] < nums[i]:  # found an element to the right that is strictly smaller
                     result[i] += 1
         return result
 `;
@@ -856,12 +881,15 @@ const SMALLER_SOL_S2 = SMALLER_SOL_S1 + `
     def count_smaller_efficient(self, nums: List[int]) -> List[int]:
         import bisect
         n = len(nums)
-        result = [0] * n
-        sorted_right = []
+        result = [0] * n    # result[i] = count of elements to the right smaller than nums[i]
+        sorted_right = []   # sorted list of elements seen so far (right-to-left sweep)
+        # Process right-to-left: when we process nums[i], sorted_right contains
+        # exactly the elements to its right, in sorted order
         for i in range(n - 1, -1, -1):
+            # bisect_left gives the insertion index = count of elements strictly less than nums[i]
             pos = bisect.bisect_left(sorted_right, nums[i])
-            result[i] = pos
-            bisect.insort(sorted_right, nums[i])
+            result[i] = pos                       # that count is our answer for index i
+            bisect.insort(sorted_right, nums[i])  # insert to maintain sorted order
         return result
 `;
 
@@ -1142,25 +1170,26 @@ from typing import Optional, Any
 
 class InMemoryDatabase(InMemoryDatabaseBase):
     def __init__(self):
-        self.data = {}
-        self.history_log = defaultdict(list)
-        self.locks = {}
-        self.transactions = {}
-        self._clock = 0
+        self.data = {}                       # key -> current value
+        self.history_log = defaultdict(list) # key -> [(timestamp, value), ...]
+        self.locks = {}                      # key -> owner caller_id
+        self.transactions = {}               # caller_id -> list of undo operations
+        self._clock = 0                      # logical clock; incremented on every write
 
     def _tick(self):
-        self._clock += 1
-        return self._clock
+        self._clock += 1   # advance logical time
+        return self._clock # return the new timestamp for the caller to record
 
     def set(self, key: str, value: Any, caller_id=None) -> bool:
-        if key in self.locks and caller_id != self.locks[key]:
+        if key in self.locks and caller_id != self.locks[key]:  # locked by someone else
             return False
         ts = self._tick()
-        old_value = self.data.get(key)
+        old_value = self.data.get(key)  # save for potential rollback
         if caller_id and caller_id in self.transactions:
+            # Record the undo operation: to rollback a set, restore the old value
             self.transactions[caller_id].append(("set", key, old_value))
         self.data[key] = value
-        self.history_log[key].append((ts, value))
+        self.history_log[key].append((ts, value))  # append-only audit log
         return True
 
     def get(self, key: str) -> Optional[Any]:
@@ -1169,14 +1198,15 @@ class InMemoryDatabase(InMemoryDatabaseBase):
     def delete(self, key: str, caller_id=None) -> bool:
         if key not in self.data:
             return False
-        if key in self.locks and caller_id != self.locks[key]:
+        if key in self.locks and caller_id != self.locks[key]:  # locked by someone else
             return False
         ts = self._tick()
-        old_value = self.data[key]
+        old_value = self.data[key]  # save for potential rollback
         if caller_id and caller_id in self.transactions:
+            # Record the undo operation: to rollback a delete, restore the value
             self.transactions[caller_id].append(("delete", key, old_value))
         del self.data[key]
-        self.history_log[key].append((ts, None))
+        self.history_log[key].append((ts, None))  # None signals deletion in the audit log
         return True
 
     def count(self) -> int:
@@ -1186,18 +1216,18 @@ class InMemoryDatabase(InMemoryDatabaseBase):
         return list(self.history_log[key])
 
     def modified_since(self, timestamp: int) -> list:
-        result = set()
+        result = set()  # use a set to deduplicate keys modified multiple times
         for key, entries in self.history_log.items():
             for ts, _ in entries:
-                if ts > timestamp:
+                if ts > timestamp:   # at least one write happened after the given timestamp
                     result.add(key)
-                    break
-        return sorted(result)
+                    break            # no need to scan further entries for this key
+        return sorted(result)        # sorted for deterministic output
 
     def lock(self, key: str, caller_id: str) -> bool:
         if key in self.locks:
-            return self.locks[key] == caller_id
-        self.locks[key] = caller_id
+            return self.locks[key] == caller_id  # idempotent: re-locking by the same owner is OK
+        self.locks[key] = caller_id  # acquire the lock
         return True
 
     def unlock(self, key: str, caller_id: str) -> bool:
@@ -1221,16 +1251,17 @@ class InMemoryDatabase(InMemoryDatabaseBase):
     def rollback(self, caller_id: str) -> bool:
         if caller_id not in self.transactions:
             return False
+        # Replay undo operations in reverse order (LIFO) to restore original state
         for action, key, old_value in reversed(self.transactions[caller_id]):
             ts = self._tick()
             if action == "set":
-                if old_value is None:
+                if old_value is None:  # the key didn't exist before the set — delete it again
                     self.data.pop(key, None)
                     self.history_log[key].append((ts, None))
-                else:
+                else:                  # restore the previous value
                     self.data[key] = old_value
                     self.history_log[key].append((ts, old_value))
-            elif action == "delete":
+            elif action == "delete":   # the key existed before the delete — restore it
                 self.data[key] = old_value
                 self.history_log[key].append((ts, old_value))
         del self.transactions[caller_id]
@@ -1493,19 +1524,22 @@ from typing import Optional
 
 class BankSystem(BankSystemBase):
     def __init__(self):
-        self.accounts = {}
-        self.redirects = {}
-        self.total_outgoing = defaultdict(float)
-        self.closed = set()
+        self.accounts = {}                        # account_id -> balance
+        self.redirects = {}                       # closed_id -> canonical_id (union-find)
+        self.total_outgoing = defaultdict(float)  # account_id -> total withdrawn/transferred out
+        self.closed = set()                       # account_ids that have been merged away
 
     def _resolve(self, account_id: str) -> str:
-        visited = []
+        visited = []  # collect intermediate nodes for path compression
+        # Follow the redirect chain until we reach the canonical account
         while account_id in self.redirects:
             visited.append(account_id)
             account_id = self.redirects[account_id]
+        # Path compression: point all visited nodes directly to the root
+        # This flattens the chain so future lookups are O(1)
         for v in visited:
             self.redirects[v] = account_id
-        return account_id
+        return account_id  # the canonical (non-redirected) account
 
     def create(self, account_id: str) -> bool:
         if account_id in self.accounts or account_id in self.closed:
@@ -1526,7 +1560,7 @@ class BankSystem(BankSystemBase):
         if account_id not in self.accounts: return None
         if self.accounts[account_id] < amount: return None
         self.accounts[account_id] -= amount
-        self.total_outgoing[account_id] += amount
+        self.total_outgoing[account_id] += amount  # track outgoing for top_spenders/cashback
         return self.accounts[account_id]
 
     def balance(self, account_id: str) -> Optional[float]:
@@ -1542,7 +1576,7 @@ class BankSystem(BankSystemBase):
         if self.accounts[from_id] < amount: return False
         self.accounts[from_id] -= amount
         self.accounts[to_id] += amount
-        self.total_outgoing[from_id] += amount
+        self.total_outgoing[from_id] += amount  # transfers count as outgoing spend
         return True
 
     def merge(self, source_id: str, target_id: str) -> bool:
@@ -1550,24 +1584,26 @@ class BankSystem(BankSystemBase):
         target_id = self._resolve(target_id)
         if source_id not in self.accounts or target_id not in self.accounts: return False
         if source_id == target_id: return False
-        self.accounts[target_id] += self.accounts[source_id]
-        self.total_outgoing[target_id] += self.total_outgoing[source_id]
-        del self.accounts[source_id]
-        self.closed.add(source_id)
-        self.redirects[source_id] = target_id
+        self.accounts[target_id] += self.accounts[source_id]              # absorb balance
+        self.total_outgoing[target_id] += self.total_outgoing[source_id]  # absorb spend history
+        del self.accounts[source_id]        # source no longer has its own balance entry
+        self.closed.add(source_id)          # mark as closed so create() rejects it
+        self.redirects[source_id] = target_id  # future ops on source_id resolve to target_id
         return True
 
     def top_spenders(self, n: int) -> list:
+        # Only consider currently active accounts (merged-away accounts are excluded)
         active = [(aid, self.total_outgoing.get(aid, 0.0)) for aid in self.accounts]
+        # Sort by total outgoing descending; break ties alphabetically by account_id
         active.sort(key=lambda x: (-x[1], x[0]))
-        return active[:n]
+        return active[:n]  # return the top n
 
     def cashback(self, percentage: float) -> int:
-        count = 0
+        count = 0  # number of accounts that received a cashback credit
         for aid in list(self.accounts.keys()):
             outgoing = self.total_outgoing.get(aid, 0.0)
-            if outgoing > 0:
-                self.accounts[aid] += outgoing * (percentage / 100.0)
+            if outgoing > 0:  # only credit accounts that have actually spent something
+                self.accounts[aid] += outgoing * (percentage / 100.0)  # credit the cashback
                 count += 1
         return count
 `;
@@ -1759,21 +1795,22 @@ from collections import OrderedDict
 class LRUCache(LRUCacheBase):
     def __init__(self, capacity: int):
         self.capacity = capacity
-        self.cache = OrderedDict()
+        # OrderedDict preserves insertion order and supports O(1) move_to_end + popitem
+        self.cache = OrderedDict()  # key -> value; most-recently-used at the right end
 
     def get(self, key: int) -> int:
-        if key not in self.cache: return -1
-        self.cache.move_to_end(key)
+        if key not in self.cache: return -1  # cache miss
+        self.cache.move_to_end(key)          # mark as most-recently-used
         return self.cache[key]
 
     def put(self, key: int, value: int) -> None:
         if key in self.cache:
-            self.cache.move_to_end(key)
+            self.cache.move_to_end(key)  # update existing key — promote to MRU
             self.cache[key] = value
         else:
             if len(self.cache) >= self.capacity:
-                self.cache.popitem(last=False)
-            self.cache[key] = value
+                self.cache.popitem(last=False)  # evict LRU: remove from the left (oldest) end
+            self.cache[key] = value             # insert at the right (MRU) end
 `;
 
 const LRU_SOL_S2 = `\
@@ -1784,7 +1821,7 @@ class LRUCache(LRUCacheBase):
     def __init__(self, capacity: int):
         self.capacity = capacity
         self.cache = OrderedDict()
-        self.ttl_cache = OrderedDict()  # key → (value, expiry)
+        self.ttl_cache = OrderedDict()  # key -> (value, expiry_unix_timestamp)
 
     def get(self, key: int) -> int:
         if key not in self.cache: return -1
@@ -1803,19 +1840,19 @@ class LRUCache(LRUCacheBase):
     def get_with_ttl(self, key: int) -> int:
         if key not in self.ttl_cache: return -1
         value, expiry = self.ttl_cache[key]
-        if time.time() > expiry:
+        if time.time() > expiry:         # entry has expired — evict it lazily on access
             del self.ttl_cache[key]
             return -1
-        self.ttl_cache.move_to_end(key)
+        self.ttl_cache.move_to_end(key)  # still valid — promote to MRU
         return value
 
     def put_with_ttl(self, key: int, value: int, ttl: float) -> None:
-        expiry = time.time() + ttl
+        expiry = time.time() + ttl       # compute absolute expiry time
         if key in self.ttl_cache:
-            self.ttl_cache.move_to_end(key)
+            self.ttl_cache.move_to_end(key)      # refresh position (update TTL below)
         elif len(self.ttl_cache) >= self.capacity:
-            self.ttl_cache.popitem(last=False)
-        self.ttl_cache[key] = (value, expiry)
+            self.ttl_cache.popitem(last=False)   # evict LRU entry to make room
+        self.ttl_cache[key] = (value, expiry)    # store value + expiry together
 `;
 
 const LRU_SOL_S3 = LRU_SOL_S2 + `
@@ -1825,19 +1862,19 @@ class Task:
         self.task_id = task_id
         self.description = description
         self.priority = priority
-        self.status = "pending"
+        self.status = "pending"  # "pending" or "complete"
 
 class TaskManager(TaskManagerBase):
     def __init__(self):
-        self.tasks = {}
-        self.pq = []  # (-priority, task_id)
+        self.tasks = {}   # task_id -> Task object
+        self.pq = []      # min-heap of (-priority, task_id); negated so highest priority pops first
 
     def add_task(self, task_id: str, description: str, priority: int) -> bool:
         if task_id in self.tasks: return False
         task = Task(task_id, description, priority)
         self.tasks[task_id] = task
         import heapq
-        heapq.heappush(self.pq, (-priority, task_id))
+        heapq.heappush(self.pq, (-priority, task_id))  # negate priority for max-heap semantics
         return True
 
     def get_task(self, task_id: str):
@@ -1851,13 +1888,15 @@ class TaskManager(TaskManagerBase):
 
     def get_highest_priority(self):
         import heapq
+        # Lazy deletion: the heap may contain stale entries for completed tasks
+        # Keep popping until we find a pending task or exhaust the heap
         while self.pq:
-            neg_pri, task_id = self.pq[0]
+            neg_pri, task_id = self.pq[0]       # peek at the top without removing
             task = self.tasks.get(task_id)
             if task and task.status == "pending":
-                return task
-            heapq.heappop(self.pq)
-        return None
+                return task                     # found a valid pending task
+            heapq.heappop(self.pq)              # stale entry — discard and continue
+        return None  # no pending tasks remain
 
     def list_tasks(self, status=None) -> list:
         tasks = list(self.tasks.values())

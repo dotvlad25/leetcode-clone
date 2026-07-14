@@ -929,7 +929,7 @@ export default function ProblemDetail() {
                              {isStaged ? `Stage ${currentStageNumber} solution.py` : (activeVariant ? activeVariant.label : "solution.py")}
                            </span>
                          </div>
-                          <div className="prose prose-sm prose-invert max-w-none overflow-auto max-h-[500px]">
+                         <div className="prose prose-sm prose-invert max-w-none overflow-auto">
                             <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{`\`\`\`python\n${effectiveSolution ?? ""}\n\`\`\``}</Streamdown>
                           </div>
                        </div>

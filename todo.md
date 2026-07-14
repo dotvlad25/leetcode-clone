@@ -115,3 +115,10 @@
 - [x] Result JSON always emitted via _orig_print (stdout) so test pass/fail is never broken
 - [x] Router formatStderrForTerminal helper distinguishes user print output from Python tracebacks
 - [x] Print output shown in terminal panel with 📤 label; tracebacks shown with error label
+
+## Solution Quality (NEW)
+- [x] Add detailed inline comments to all staged problem reference solutions (all 8 problems, all stages)
+- [x] Fix solution tab for staged problems: show currentStage.solution instead of problem.solution
+- [x] Remove max-h-[500px] cap from solution code block so full solution is visible without inner scroll
+- [x] Fix test_level_N.py indentation: split inputData on real newlines not escaped \\n
+- [x] Fix generateTestFileContent: emit expectedOutput as Python expression (no JSON.stringify wrapping)
