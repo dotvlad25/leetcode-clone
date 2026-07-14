@@ -335,9 +335,24 @@ export function buildStagedTestScript(
   expectedOutput: string
 ): string {
   return `
-import json, sys, traceback
+import json, sys, traceback, math
 import builtins as _builtins
 _orig_print = _builtins.print
+
+def _to_serializable(v):
+    """Recursively convert Python values to JSON-serializable form.
+    Tuples become lists so they round-trip cleanly through json.dumps."""
+    if v is None: return None
+    if isinstance(v, bool): return v
+    if isinstance(v, (int, float)):
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return str(v)
+        return v
+    if isinstance(v, str): return v
+    if isinstance(v, (list, tuple)): return [_to_serializable(i) for i in v]
+    if isinstance(v, dict): return {str(k): _to_serializable(vv) for k, vv in v.items()}
+    # Fallback: use repr for custom objects (e.g. dataclass instances)
+    return repr(v)
 
 ${baseClass}
 
@@ -354,9 +369,9 @@ try:
     # expectedOutput is a Python literal (e.g. [True, 60.0, "t2"]); eval it directly
     expected = eval(${JSON.stringify(expectedOutput)})
     if actual == expected:
-        _orig_print(json.dumps({"passed": True, "actual": repr(actual)}))
+        _orig_print(json.dumps({"passed": True, "actual": _to_serializable(actual)}))
     else:
-        _orig_print(json.dumps({"passed": False, "actual": repr(actual), "expected": repr(expected)}))
+        _orig_print(json.dumps({"passed": False, "actual": _to_serializable(actual), "expected": _to_serializable(expected)}))
 except Exception as e:
     _orig_print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
 `.trim();
