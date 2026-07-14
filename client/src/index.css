@@ -131,3 +131,13 @@
     border: 1px solid oklch(0.65 0.22 25 / 0.3);
   }
 }
+
+/* ── Monaco Editor Font Fix ──────────────────────────────────────────────── */
+/* Force Monaco to use JetBrains Mono even before remeasureFonts() fires */
+.monaco-editor,
+.monaco-editor .view-lines,
+.monaco-editor .view-line span,
+.monaco-editor .inputarea {
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace !important;
+  font-feature-settings: "liga" 1, "calt" 1;
+}

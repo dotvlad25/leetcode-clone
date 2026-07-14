@@ -444,10 +444,23 @@ export default function ProblemDetail() {
   }, []);
 
   const handleEditorMount = useCallback(
-    (_editor: unknown, _monaco: unknown) => {
-      // Draft loading is handled by the localStorage useEffect above; nothing to do here
+    (editor: any, monaco: any) => {
+      // Force Monaco to remeasure fonts after web fonts finish loading
+      document.fonts.ready.then(() => {
+        monaco.editor.remeasureFonts();
+      });
     },
     [problem, code]
+  );
+
+  // Shared onMount for read-only editors — just remeasure fonts
+  const handleReadOnlyMount = useCallback(
+    (_editor: any, monaco: any) => {
+      document.fonts.ready.then(() => {
+        monaco.editor.remeasureFonts();
+      });
+    },
+    []
   );
 
   const submitStageMutation = trpc.problems.submitStage.useMutation({
@@ -971,9 +984,11 @@ export default function ProblemDetail() {
                            language="python"
                            value={readOnlyContent}
                            theme="vs-dark"
+                           onMount={handleReadOnlyMount}
                            options={{
                              fontSize: 13,
                              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                             fontLigatures: true,
                              minimap: { enabled: false },
                              scrollBeyondLastLine: false,
                              lineNumbers: "on",
