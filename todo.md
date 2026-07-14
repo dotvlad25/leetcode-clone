@@ -103,3 +103,9 @@
 - [x] Fix NameError in staged executor: exec() used isolated globals dict, hiding user-defined classes
 - [x] Fix Monaco font regression: updateOptions() re-applies fontFamily on every tab switch; CSS !important extended to Monaco container elements; ReadOnlyEditor always mounted via display:none
 - [x] Verified staged problem runner: RateLimiter NameError resolved (exec uses globals())
+
+## Stage Progression Model (NEW)
+- [x] Completed stages are read-only: editor locked, Run/Submit hidden, show accepted solution code
+- [x] Block forward navigation in stage selector: locked stages are non-clickable (not just visually greyed)
+- [x] Expose accepted code per stage in getStageUnlockStatus response (for seeding Stage N+1)
+- [x] Seed Stage N+1 starter code from Stage N accepted solution on first unlock

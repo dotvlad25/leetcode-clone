@@ -392,6 +392,10 @@ export default function ProblemDetail() {
   );
   const highestUnlockedStage = unlockStatus?.highestUnlockedStage ?? 1;
   const isCurrentStageLocked = isStaged && currentStageNumber > highestUnlockedStage;
+  // A stage is "completed" when its number is strictly below the highest unlocked stage
+  const isCurrentStageCompleted = isStaged && currentStageNumber < highestUnlockedStage;
+  // Map of stageNumber → accepted solution code returned by the server
+  const acceptedCodePerStage: Record<number, string> = (unlockStatus as any)?.acceptedCodePerStage ?? {};
 
   // ── localStorage draft persistence ──────────────────────────────────────────
   // Draft key is per-stage for staged problems so each stage preserves its own draft independently
@@ -402,14 +406,26 @@ export default function ProblemDetail() {
   // Load saved draft on first problem load or when stage changes
   useEffect(() => {
     if (!problem) return;
-    const saved = localStorage.getItem(draftKey);
-    if (saved !== null) {
-      setCode(saved);
+    if (isStaged && currentStage) {
+      if (isCurrentStageCompleted) {
+        // Completed stage: always show the accepted solution (ignore any stale draft)
+        setCode(acceptedCodePerStage[currentStageNumber] ?? currentStage.starterCode);
+      } else {
+        // Active stage: prefer saved draft, then previous stage's accepted code, then starter code
+        const saved = localStorage.getItem(draftKey);
+        if (saved !== null) {
+          setCode(saved);
+        } else if (currentStageNumber > 1 && acceptedCodePerStage[currentStageNumber - 1]) {
+          setCode(acceptedCodePerStage[currentStageNumber - 1]);
+        } else {
+          setCode(currentStage.starterCode);
+        }
+      }
     } else {
-      // For staged problems fall back to the stage-specific starter code
-      setCode(isStaged && currentStage ? currentStage.starterCode : problem.starterCode);
+      const saved = localStorage.getItem(draftKey);
+      setCode(saved !== null ? saved : problem.starterCode);
     }
-  }, [problem?.id, currentStageNumber]);  // reload when stage changes
+  }, [problem?.id, currentStageNumber, unlockStatus?.highestUnlockedStage]);  // reload when stage or unlock status changes
 
   // Auto-save draft whenever code changes (debounced 500ms)
   useEffect(() => {
@@ -539,7 +555,8 @@ export default function ProblemDetail() {
   useEffect(() => {
     const editor = solutionEditorRef.current;
     if (!editor) return;
-    const isReadOnly = fileTab !== "solution";
+    // Also make solution read-only when viewing a completed stage
+    const isReadOnly = fileTab !== "solution" || isCurrentStageCompleted;
     // Determine the content for the active tab
     let newContent: string | null = null;
     if (fileTab === "solution") {
@@ -840,7 +857,8 @@ export default function ProblemDetail() {
                           }
                           setCurrentStageNumber(stage.stageNumber);
                         }}
-                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        disabled={stage.stageNumber > highestUnlockedStage}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                           currentStageNumber === stage.stageNumber
                             ? "bg-primary/20 text-primary border border-primary/30"
                             : "text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d]"
@@ -1020,7 +1038,7 @@ export default function ProblemDetail() {
                           Saved {lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </span>
                       )}
-                      {editorTab === "solution" && (
+                      {editorTab === "solution" && !isCurrentStageCompleted && (
                         <button
                           title="Reset to starter code"
                           className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors"
@@ -1030,30 +1048,39 @@ export default function ProblemDetail() {
                           Reset
                         </button>
                       )}
-                      <button
-                        onClick={handleAnalyze}
-                        disabled={isAnalyzing}
-                        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors disabled:opacity-50"
-                      >
-                        {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
-                        AI
-                      </button>
-                      <button
-                        onClick={handleRun}
-                        disabled={isRunning || isCurrentStageLocked}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors disabled:opacity-50"
-                      >
-                        {isRunning && runMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-                        Run
-                      </button>
-                      <button
-                        onClick={handleSubmit}
-                        disabled={isRunning || isCurrentStageLocked}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] bg-primary/90 text-primary-foreground hover:bg-primary transition-colors disabled:opacity-50"
-                      >
-                        {isRunning && submitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                        Submit
-                      </button>
+                      {isCurrentStageCompleted ? (
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] text-primary bg-primary/10 border border-primary/20 select-none">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Completed
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={handleAnalyze}
+                            disabled={isAnalyzing}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors disabled:opacity-50"
+                          >
+                            {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
+                            AI
+                          </button>
+                          <button
+                            onClick={handleRun}
+                            disabled={isRunning || isCurrentStageLocked}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors disabled:opacity-50"
+                          >
+                            {isRunning && runMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                            Run
+                          </button>
+                          <button
+                            onClick={handleSubmit}
+                            disabled={isRunning || isCurrentStageLocked}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] bg-primary/90 text-primary-foreground hover:bg-primary transition-colors disabled:opacity-50"
+                          >
+                            {isRunning && submitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            Submit
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 

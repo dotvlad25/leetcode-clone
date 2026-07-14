@@ -294,6 +294,34 @@ export async function getHighestUnlockedStage(userId: number, problemId: number)
   return Math.min(maxCompleted + 1, progress.totalStages);
 }
 
+/**
+ * Returns the most recent accepted code for each completed stage.
+ * Result: { [stageNumber]: acceptedCode }
+ */
+export async function getAcceptedCodePerStage(
+  userId: number,
+  problemId: number
+): Promise<Record<number, string>> {
+  const db = await getDb();
+  if (!db) return {};
+  const rows = await db
+    .select({ stageNumber: stageSubmissions.stageNumber, code: stageSubmissions.code })
+    .from(stageSubmissions)
+    .where(
+      and(
+        eq(stageSubmissions.userId, userId),
+        eq(stageSubmissions.problemId, problemId),
+        eq(stageSubmissions.status, "accepted")
+      )
+    )
+    .orderBy(desc(stageSubmissions.createdAt));
+  const result: Record<number, string> = {};
+  for (const row of rows) {
+    if (!(row.stageNumber in result)) result[row.stageNumber] = row.code;
+  }
+  return result;
+}
+
 /** Returns the last N stage submissions for a user on a problem, newest first. */
 export async function getStageSubmissionsForUser(userId: number, problemId: number, limit = 20) {
   const db = await getDb();

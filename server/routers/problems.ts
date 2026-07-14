@@ -18,6 +18,7 @@ import {
   getStageSubmissionsForUser,
   getBulkStageProgress,
 } from "../db";
+import { getAcceptedCodePerStage } from "../db";
 import { executePython, buildGenericTestScript, buildUnitTestCode, buildStagedTestScript, TestCaseResult } from "../executor";
 import { invokeLLM } from "../_core/llm";
 
@@ -85,7 +86,8 @@ export const problemsRouter = router({
         getHighestUnlockedStage(ctx.user.id, problem.id),
         getStageProgress(ctx.user.id, problem.id),
       ]);
-      return { highestUnlockedStage: highestUnlocked, stageProgress: progress };
+      const acceptedCodePerStage = await getAcceptedCodePerStage(ctx.user.id, problem.id);
+      return { highestUnlockedStage: highestUnlocked, stageProgress: progress, acceptedCodePerStage };
     }),
 
   // Run code against all test cases (does not save submission)
