@@ -194,6 +194,12 @@ function buildSimpleTestScript(
   const ordered = isOrderedList(methodName);
   return `
 import json, sys, traceback
+import builtins as _builtins
+_orig_print = _builtins.print
+# Redirect user print() calls to stderr; result JSON always uses _orig_print (stdout)
+def print(*args, **kwargs):
+    kwargs.setdefault('file', sys.stderr)
+    _orig_print(*args, **kwargs)
 
 ${userCode}
 
@@ -214,11 +220,11 @@ try:
     actual_norm = normalize(result)
     expected_norm = normalize(expected)
     if actual_norm == expected_norm:
-        print(json.dumps({"passed": True, "actual": result}))
+        _orig_print(json.dumps({"passed": True, "actual": result}))
     else:
-        print(json.dumps({"passed": False, "actual": result, "expected": expected}))
+        _orig_print(json.dumps({"passed": False, "actual": result, "expected": expected}))
 except Exception as e:
-    print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
+    _orig_print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
 `.trim();
 }
 
@@ -235,6 +241,12 @@ export function buildOpsReplayTestScript(
   const cn = opsReplayClassName(methodName);
   return `
 import json, sys, traceback
+import builtins as _builtins
+_orig_print = _builtins.print
+# Redirect user print() calls to stderr; result JSON always uses _orig_print (stdout)
+def print(*args, **kwargs):
+    kwargs.setdefault('file', sys.stderr)
+    _orig_print(*args, **kwargs)
 
 ${userCode}
 
@@ -252,11 +264,11 @@ try:
         else:
             results.append(getattr(obj, op)(*op_args))
     if results == expected:
-        print(json.dumps({"passed": True, "actual": results}))
+        _orig_print(json.dumps({"passed": True, "actual": results}))
     else:
-        print(json.dumps({"passed": False, "actual": results, "expected": expected}))
+        _orig_print(json.dumps({"passed": False, "actual": results, "expected": expected}))
 except Exception as e:
-    print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
+    _orig_print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
 `.trim();
 }
 
@@ -274,6 +286,12 @@ import json, sys, traceback
 from typing import List
 from collections import deque
 import threading
+import builtins as _builtins
+_orig_print = _builtins.print
+# Redirect user print() calls to stderr; result JSON always uses _orig_print (stdout)
+def print(*args, **kwargs):
+    kwargs.setdefault('file', sys.stderr)
+    _orig_print(*args, **kwargs)
 
 class HtmlParser:
     def __init__(self, graph):
@@ -296,11 +314,11 @@ try:
     result = sol.crawl(start_url, parser)
     expected = json.loads(${JSON.stringify(expectedOutput)})
     if sorted(result) == sorted(expected):
-        print(json.dumps({"passed": True, "actual": result}))
+        _orig_print(json.dumps({"passed": True, "actual": result}))
     else:
-        print(json.dumps({"passed": False, "actual": result, "expected": expected}))
+        _orig_print(json.dumps({"passed": False, "actual": result, "expected": expected}))
 except Exception as e:
-    print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
+    _orig_print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
 `.trim();
 }
 
@@ -318,6 +336,12 @@ export function buildStagedTestScript(
 ): string {
   return `
 import json, sys, traceback
+import builtins as _builtins
+_orig_print = _builtins.print
+# Redirect user print() calls to stderr; result JSON always uses _orig_print (stdout)
+def print(*args, **kwargs):
+    kwargs.setdefault('file', sys.stderr)
+    _orig_print(*args, **kwargs)
 
 ${baseClass}
 
@@ -331,15 +355,16 @@ try:
     import io
     from contextlib import redirect_stdout
     buf = io.StringIO()
+    # Pass the stderr-redirected print into exec() so user prints inside exec go to stderr too
     with redirect_stdout(buf):
-        exec(input_lines, globals())
+        exec(input_lines, {**globals(), 'print': print})
     actual = buf.getvalue().strip()
     if actual == expected:
-        print(json.dumps({"passed": True, "actual": actual}))
+        _orig_print(json.dumps({"passed": True, "actual": actual}))
     else:
-        print(json.dumps({"passed": False, "actual": actual, "expected": expected}))
+        _orig_print(json.dumps({"passed": False, "actual": actual, "expected": expected}))
 except Exception as e:
-    print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
+    _orig_print(json.dumps({"passed": False, "actual": None, "error": traceback.format_exc()}))
 `.trim();
 }
 

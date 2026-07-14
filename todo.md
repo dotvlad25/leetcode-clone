@@ -109,3 +109,9 @@
 - [x] Block forward navigation in stage selector: locked stages are non-clickable (not just visually greyed)
 - [x] Expose accepted code per stage in getStageUnlockStatus response (for seeding Stage N+1)
 - [x] Seed Stage N+1 starter code from Stage N accepted solution on first unlock
+
+## Print Support (NEW)
+- [x] User print() calls in solution code are redirected to stderr in the test harness
+- [x] Result JSON always emitted via _orig_print (stdout) so test pass/fail is never broken
+- [x] Router formatStderrForTerminal helper distinguishes user print output from Python tracebacks
+- [x] Print output shown in terminal panel with 📤 label; tracebacks shown with error label

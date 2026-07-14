@@ -22,6 +22,24 @@ import { getAcceptedCodePerStage } from "../db";
 import { executePython, buildGenericTestScript, buildUnitTestCode, buildStagedTestScript, TestCaseResult } from "../executor";
 import { invokeLLM } from "../_core/llm";
 
+// ── Stderr formatter ─────────────────────────────────────────────────────────
+// User print() calls are redirected to stderr by the test harness.
+// Python tracebacks start with "Traceback" or "  File " — everything else is
+// user print output. We split them so the terminal shows a clear label.
+function formatStderrForTerminal(stderr: string, caseLabel: string): string[] {
+  if (!stderr || !stderr.trim()) return [];
+  const lines = stderr.trim().split("\n");
+  // Heuristic: if any line looks like a Python traceback, treat the whole block as an error
+  const isTraceback = lines.some(l =>
+    l.startsWith("Traceback") || l.startsWith("  File ") || /^[A-Za-z]+Error:/.test(l)
+  );
+  if (isTraceback) {
+    return [`--- error (${caseLabel}) ---`, stderr.trim()];
+  }
+  // Otherwise it's user print() output
+  return [`📤 print output (${caseLabel}):`, ...lines.map(l => `   ${l}`)];
+}
+
 export const problemsRouter = router({
   // List all problems (with optional solved status for authenticated users)
   list: publicProcedure.query(async ({ ctx }) => {
@@ -113,11 +131,7 @@ export const problemsRouter = router({
           tc.expectedOutput
         );
         const exec = await executePython(script);
-        // Always emit raw stderr first (syntax errors, tracebacks)
-        if (exec.stderr && exec.stderr.trim()) {
-          terminalLines.push(`--- stderr (case ${tc.orderIndex + 1}) ---`);
-          terminalLines.push(exec.stderr.trim());
-        }
+        terminalLines.push(...formatStderrForTerminal(exec.stderr, `case ${tc.orderIndex + 1}`));
         if (exec.timedOut) {
           results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)", stdout: "", stderr: "TLE" });
           terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description} — Time Limit Exceeded`);
@@ -194,10 +208,7 @@ export const problemsRouter = router({
           tc.expectedOutput
         );
         const exec = await executePython(script);
-        if (exec.stderr && exec.stderr.trim()) {
-          terminalLines.push(`--- stderr (case ${tc.orderIndex + 1}) ---`);
-          terminalLines.push(exec.stderr.trim());
-        }
+        terminalLines.push(...formatStderrForTerminal(exec.stderr, `case ${tc.orderIndex + 1}`));
         if (exec.timedOut) {
           results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)", stdout: "", stderr: "TLE" });
           terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description} — Time Limit Exceeded`);
@@ -433,10 +444,7 @@ Provide a thorough code review.`;
           tc.expectedOutput
         );
         const exec = await executePython(script);
-        if (exec.stderr && exec.stderr.trim()) {
-          terminalLines.push(`--- stderr (case ${tc.orderIndex + 1}) ---`);
-          terminalLines.push(exec.stderr.trim());
-        }
+        terminalLines.push(...formatStderrForTerminal(exec.stderr, `case ${tc.orderIndex + 1}`));
         if (exec.timedOut) {
           results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)", stdout: "", stderr: "TLE" });
           terminalLines.push(`❌ Case ${tc.orderIndex + 1}: ${tc.description} — Time Limit Exceeded`);
@@ -539,10 +547,7 @@ Provide a thorough code review.`;
           tc.expectedOutput
         );
         const exec = await executePython(script);
-        if (exec.stderr && exec.stderr.trim()) {
-          terminalLines.push(`--- stderr ---`);
-          terminalLines.push(exec.stderr.trim());
-        }
+        terminalLines.push(...formatStderrForTerminal(exec.stderr, tc.description));
         if (exec.timedOut) {
           results.push({ id: tc.id, description: tc.description, passed: false, expected: tc.expectedOutput, actual: "", error: "Time Limit Exceeded (10s)", stdout: "", stderr: "TLE" });
           terminalLines.push(`❌ ${tc.description} — Time Limit Exceeded`);
