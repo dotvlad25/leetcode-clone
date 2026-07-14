@@ -2071,7 +2071,7 @@ export async function runStagedSeed() {
           {
             description: "Mid-stream stack swap emits end then start at same depth",
             inputData: `p = Profiler()\nevents = p.convert_to_events([["main", "foo"], ["main", "bar"], []])\n_result = [[e.function, e.depth, e.event_type, e.timestamp] for e in events]`,
-            expectedOutput: "[('main', 0, 'start', 0), ('foo', 1, 'start', 0), ('foo', 1, 'end', 1), ('bar', 1, 'start', 1), ('bar', 1, 'end', 2), ('main', 0, 'end', 2)]",
+            expectedOutput: `[["main", 0, "start", 0], ["foo", 1, "start", 0], ["foo", 1, "end", 1], ["bar", 1, "start", 1], ["bar", 1, "end", 2], ["main", 0, "end", 2]]`,
             orderIndex: 3,
           },
         ],
@@ -2094,7 +2094,7 @@ export async function runStagedSeed() {
           {
             description: "Denoising keeps long-lived functions",
             inputData: `p = Profiler()\nsnaps = [["main", "worker"]] * 5\nevents = p.convert_with_denoising(snaps, min_samples=3)\n_result = [[e.function, e.depth, e.event_type, e.timestamp] for e in events]`,
-            expectedOutput: `[["main", 0, "start", 0], ["worker", 1, "start", 0], ["main", 0, "end", 5], ["worker", 1, "end", 5]]`,
+            expectedOutput: `[["main", 0, "start", 0], ["worker", 1, "start", 0], ["worker", 1, "end", 5], ["main", 0, "end", 5]]`,
             orderIndex: 1,
           },
         ],
