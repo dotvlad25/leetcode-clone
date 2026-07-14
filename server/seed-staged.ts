@@ -1895,19 +1895,19 @@ export async function runStagedSeed() {
           {
             description: "Basic allow/deny within window",
             inputData: `import time\nrl = RateLimiter(max_requests=3, window_seconds=60.0)\n_result = [rl.allow_request("alice") for _ in range(4)]`,
-            expectedOutput: "[true, true, true, false]",
+            expectedOutput: "[True, True, True, False]",
             orderIndex: 0,
           },
           {
             description: "Different users have independent limits",
             inputData: `import time\nrl = RateLimiter(max_requests=2, window_seconds=60.0)\n_result = [rl.allow_request("alice"), rl.allow_request("alice"), rl.allow_request("alice"), rl.allow_request("bob")]`,
-            expectedOutput: "[true, true, false, true]",
+            expectedOutput: "[True, True, False, True]",
             orderIndex: 1,
           },
           {
             description: "Single request always allowed",
             inputData: `rl = RateLimiter(max_requests=1, window_seconds=60.0)\n_result = [rl.allow_request("x"), rl.allow_request("x")]`,
-            expectedOutput: "[true, false]",
+            expectedOutput: "[True, False]",
             orderIndex: 2,
           },
         ],
@@ -1924,7 +1924,7 @@ export async function runStagedSeed() {
           {
             description: "Cleanup removes expired users",
             inputData: `import time\nrl = RateLimiter(max_requests=5, window_seconds=0.001)\nrl.allow_request("alice")\nrl.allow_request("bob")\ntime.sleep(0.05)\ncount = rl.cleanup()\n_result = count >= 2`,
-            expectedOutput: "true",
+            expectedOutput: "True",
             orderIndex: 0,
           },
           {
@@ -1947,13 +1947,13 @@ export async function runStagedSeed() {
           {
             description: "Thread-safe version respects limits under concurrency",
             inputData: `import threading\nrl = RateLimiter(max_requests=50, window_seconds=60.0)\nresults = []\nlock = threading.Lock()\ndef req():\n    r = rl.allow_request_thread_safe("alice")\n    with lock: results.append(r)\nthreads = [threading.Thread(target=req) for _ in range(60)]\nfor t in threads: t.start()\nfor t in threads: t.join()\n_result = [results.count(True) == 50, results.count(False) == 10]`,
-            expectedOutput: "[true, true]",
+            expectedOutput: "[True, True]",
             orderIndex: 0,
           },
           {
             description: "Thread-safe allows independent users concurrently",
             inputData: `import threading\nrl = RateLimiter(max_requests=1, window_seconds=60.0)\nresults = {}\nlock = threading.Lock()\ndef req(uid):\n    r = rl.allow_request_thread_safe(uid)\n    with lock: results[uid] = r\nthreads = [threading.Thread(target=req, args=(f"user{i}",)) for i in range(5)]\nfor t in threads: t.start()\nfor t in threads: t.join()\n_result = all(results.values())`,
-            expectedOutput: "true",
+            expectedOutput: "True",
             orderIndex: 1,
           },
         ],
@@ -2271,13 +2271,13 @@ export async function runStagedSeed() {
           {
             description: "Basic set/get/delete/count",
             inputData: `db = InMemoryDatabase()\ndb.set("x", 42)\n_result = [db.get("x"), db.count(), db.delete("x"), db.get("x"), db.count()]`,
-            expectedOutput: `[42, 1, true, null, 0]`,
+            expectedOutput: `[42, 1, True, None, 0]`,
             orderIndex: 0,
           },
           {
             description: "Delete non-existent key returns False",
             inputData: `db = InMemoryDatabase()\n_result = db.delete("missing")`,
-            expectedOutput: `false`,
+            expectedOutput: `False`,
             orderIndex: 1,
           },
           {
@@ -2300,13 +2300,13 @@ export async function runStagedSeed() {
           {
             description: "History tracks all values",
             inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.set("x", 2)\ndb.set("x", 3)\nh = db.history("x")\n_result = [len(h) == 3, [v for _, v in h] == [1, 2, 3]]`,
-            expectedOutput: `[true, true]`,
+            expectedOutput: `[True, True]`,
             orderIndex: 0,
           },
           {
             description: "modified_since returns correct keys",
             inputData: `db = InMemoryDatabase()\ndb.set("a", 1)\ndb.set("b", 2)\nresult = db.modified_since(1)\n_result = ["b" in result, "a" not in result]`,
-            expectedOutput: `[true, true]`,
+            expectedOutput: `[True, True]`,
             orderIndex: 1,
           },
         ],
@@ -2323,19 +2323,19 @@ export async function runStagedSeed() {
           {
             description: "Lock prevents write by other caller",
             inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\n_result = [db.set("x", 2, caller_id="bob"), db.get("x")]`,
-            expectedOutput: `[false, 1]`,
+            expectedOutput: `[False, 1]`,
             orderIndex: 0,
           },
           {
             description: "Lock holder can write",
             inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\n_result = [db.set("x", 99, caller_id="alice"), db.get("x")]`,
-            expectedOutput: `[true, 99]`,
+            expectedOutput: `[True, 99]`,
             orderIndex: 1,
           },
           {
             description: "Unlock allows anyone to write",
             inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.lock("x", "alice")\ndb.unlock("x", "alice")\n_result = [db.set("x", 5), db.get("x")]`,
-            expectedOutput: `[true, 5]`,
+            expectedOutput: `[True, 5]`,
             orderIndex: 2,
           },
         ],
@@ -2358,13 +2358,13 @@ export async function runStagedSeed() {
           {
             description: "Commit makes changes permanent",
             inputData: `db = InMemoryDatabase()\ndb.set("x", 1)\ndb.begin("alice")\ndb.set("x", 99, caller_id="alice")\ndb.commit("alice")\n_result = [db.get("x"), db.begin("alice")]`,
-            expectedOutput: `[99, true]`,
+            expectedOutput: `[99, True]`,
             orderIndex: 1,
           },
           {
             description: "Rollback of delete restores key",
             inputData: `db = InMemoryDatabase()\ndb.set("x", 42)\ndb.begin("bob")\ndb.delete("x", caller_id="bob")\nbefore = db.get("x")\ndb.rollback("bob")\nafter = db.get("x")\n_result = [before, after]`,
-            expectedOutput: `[null, 42]`,
+            expectedOutput: `[None, 42]`,
             orderIndex: 2,
           },
         ],
@@ -2402,13 +2402,13 @@ export async function runStagedSeed() {
           {
             description: "Withdraw fails on insufficient funds",
             inputData: `bank = BankSystem()\nbank.create("alice")\nbank.deposit("alice", 50)\n_result = bank.withdraw("alice", 100)`,
-            expectedOutput: `null`,
+            expectedOutput: `None`,
             orderIndex: 1,
           },
           {
             description: "Create duplicate returns False",
             inputData: `bank = BankSystem()\n_result = [bank.create("alice"), bank.create("alice")]`,
-            expectedOutput: `[true, false]`,
+            expectedOutput: `[True, False]`,
             orderIndex: 2,
           },
         ],
@@ -2425,19 +2425,19 @@ export async function runStagedSeed() {
           {
             description: "Successful transfer",
             inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\nbank.create("bob"); bank.deposit("bob", 0)\n_result = [bank.transfer("alice", "bob", 40), bank.balance("alice"), bank.balance("bob")]`,
-            expectedOutput: `[true, 60.0, 40.0]`,
+            expectedOutput: `[True, 60.0, 40.0]`,
             orderIndex: 0,
           },
           {
             description: "Transfer fails on insufficient funds",
             inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 10)\nbank.create("bob")\n_result = [bank.transfer("alice", "bob", 50), bank.balance("alice")]`,
-            expectedOutput: `[false, 10.0]`,
+            expectedOutput: `[False, 10.0]`,
             orderIndex: 1,
           },
           {
             description: "Transfer fails for unknown account",
             inputData: `bank = BankSystem()\nbank.create("alice"); bank.deposit("alice", 100)\n_result = bank.transfer("alice", "ghost", 10)`,
-            expectedOutput: `false`,
+            expectedOutput: `False`,
             orderIndex: 2,
           },
         ],

@@ -351,8 +351,8 @@ try:
     ns = {**globals(), 'print': print}
     exec(${JSON.stringify(inputData)}, ns)
     actual = ns.get('_result')
-    # expectedOutput is a JSON string; parse it to get the Python value for comparison
-    expected = json.loads(${JSON.stringify(expectedOutput)})
+    # expectedOutput is a Python literal (e.g. [True, 60.0, "t2"]); eval it directly
+    expected = eval(${JSON.stringify(expectedOutput)})
     if actual == expected:
         _orig_print(json.dumps({"passed": True, "actual": repr(actual)}))
     else:

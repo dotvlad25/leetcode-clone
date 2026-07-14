@@ -457,7 +457,7 @@ Provide a thorough code review.`;
             description: tc.description,
             passed: parsed.passed === true,
             expected: tc.expectedOutput,
-            actual: parsed.actual !== undefined ? String(parsed.actual) : exec.stdout,
+            actual: parsed.actual !== undefined ? parsed.actual : exec.stdout,
             error: parsed.error,
             stdout: exec.stdout,
             stderr: exec.stderr,
@@ -466,7 +466,7 @@ Provide a thorough code review.`;
           const icon = r.passed ? "✅" : "❌";
           terminalLines.push(`${icon} Case ${tc.orderIndex + 1}: ${tc.description}`);
           if (!r.passed) {
-            terminalLines.push(`   Expected: ${tc.expectedOutput}`);
+            terminalLines.push(`   Expected: ${parsed.expected ?? tc.expectedOutput}`);
             terminalLines.push(`   Got:      ${r.actual}`);
             if (r.error) terminalLines.push(`   Error:\n${r.error.split("\n").map((l: string) => "   " + l).join("\n")}`);
           }
@@ -560,7 +560,7 @@ Provide a thorough code review.`;
             description: tc.description,
             passed: parsed.passed === true,
             expected: tc.expectedOutput,
-            actual: parsed.actual !== undefined ? String(parsed.actual) : exec.stdout,
+            actual: parsed.actual !== undefined ? parsed.actual : exec.stdout,
             error: parsed.error,
             stdout: exec.stdout,
             stderr: exec.stderr,
@@ -568,7 +568,7 @@ Provide a thorough code review.`;
           results.push(r);
           terminalLines.push(`${r.passed ? "✅" : "❌"} ${tc.description}`);
           if (!r.passed) {
-            terminalLines.push(`   Expected: ${tc.expectedOutput}`);
+            terminalLines.push(`   Expected: ${parsed.expected ?? tc.expectedOutput}`);
             terminalLines.push(`   Got:      ${r.actual}`);
             if (r.error) terminalLines.push(`   Error:\n${r.error.split("\n").map((l: string) => "   " + l).join("\n")}`);
           }
