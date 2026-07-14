@@ -43,98 +43,8 @@ import type { ImperativePanelHandle } from "react-resizable-panels";
 
 // ── Persistent Read-Only Editor ───────────────────────────────────────────────
 // Stays mounted across tab switches; uses setValue() to swap content.
-// The `visible` prop hides the editor via display:none instead of unmounting it —
-// this prevents Monaco from losing its font measurement state on every tab switch.
-function ReadOnlyEditor({ content, visible = true }: { content: string; visible?: boolean }) {
-  const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (editorRef.current) {
-      const model = editorRef.current.getModel();
-      if (model && model.getValue() !== content) {
-        model.setValue(content);
-      }
-    }
-  }, [content]);
-
-  // Re-measure fonts and trigger a layout pass whenever the editor becomes visible.
-  useEffect(() => {
-    if (!visible || !editorRef.current || !monacoRef.current) return;
-    const relayout = () => {
-      editorRef.current?.layout();
-      monacoRef.current?.editor.remeasureFonts();
-    };
-    const frame = requestAnimationFrame(() => {
-      relayout();
-      requestAnimationFrame(relayout);
-    });
-    document.fonts.ready.then(relayout);
-    return () => cancelAnimationFrame(frame);
-  }, [visible]);
-
-  // Re-apply fontFamily via updateOptions whenever the editor becomes visible.
-  // Monaco can silently drop the web font when the container is hidden/shown;
-  // calling updateOptions() forces it to re-evaluate the font stack.
-  useEffect(() => {
-    if (!visible || !editorRef.current) return;
-    const apply = () => {
-      editorRef.current?.updateOptions({
-        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fontLigatures: true,
-      });
-      editorRef.current?.layout();
-      monacoRef.current?.editor.remeasureFonts();
-    };
-    const frame = requestAnimationFrame(() => { apply(); requestAnimationFrame(apply); });
-    document.fonts.ready.then(apply);
-    return () => cancelAnimationFrame(frame);
-  }, [visible]);
-
-  return (
-    <div style={{
-      position: visible ? "relative" : "absolute",
-      inset: 0,
-      height: "100%",
-      display: "flex",
-      flexDirection: "column",
-      visibility: visible ? "visible" : "hidden",
-      pointerEvents: visible ? "auto" : "none",
-      zIndex: visible ? 1 : 0,
-    }}>
-      <Editor
-        height="100%"
-        defaultLanguage="python"
-        language="python"
-        defaultValue={content}
-        theme="vs-dark"
-        onMount={(editor, monaco) => {
-          editorRef.current = editor;
-          monacoRef.current = monaco;
-          monaco.editor.remeasureFonts();
-          document.fonts.ready.then(() => {
-            editor.layout();
-            monaco.editor.remeasureFonts();
-          });
-        }}
-        options={{
-          fontSize: 13,
-          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-          fontLigatures: true,
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          lineNumbers: "on",
-          readOnly: true,
-          domReadOnly: true,
-          wordWrap: "on",
-          padding: { top: 12, bottom: 12 },
-          renderLineHighlight: "none",
-          scrollbar: { vertical: "auto", alwaysConsumeMouseWheel: false },
-        }}
-      />
-    </div>
-  );
-}
+// (ReadOnlyEditor component removed — the right panel now uses a single Monaco instance
+//  that swaps content/readOnly on tab switch, avoiding global font-cache poisoning.)
 
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const cls =
@@ -610,6 +520,54 @@ export default function ProblemDetail() {
     return () => cancelAnimationFrame(frame);
   }, [fileTab]);
 
+  // ── Single-editor model swap ─────────────────────────────────────────────────
+  // When fileTab changes, swap the editor's content and readOnly flag instead of
+  // mounting/unmounting editors. This prevents Monaco's global font cache from
+  // being poisoned by layout calls on hidden/zero-sized containers.
+  useEffect(() => {
+    const editor = solutionEditorRef.current;
+    if (!editor) return;
+    const isReadOnly = fileTab !== "solution";
+    // Determine the content for the active tab
+    let newContent: string | null = null;
+    if (fileTab === "solution") {
+      newContent = null; // keep controlled by `value` prop / code state
+    } else if (fileTab === "base_class" && currentStage) {
+      newContent = currentStage.baseClass;
+    } else if (fileTab.startsWith("test_level_") && stages) {
+      const stageNum = parseInt(fileTab.replace("test_level_", ""), 10);
+      const s = stages.find(st => st.stageNumber === stageNum);
+      newContent = s?.testFileContent ?? `# Tests for Stage ${stageNum}\n# (Test content not available)`;
+    } else if (fileTab === "tests") {
+      newContent = problem?.unitTestCode ?? "# Unit tests not available";
+    }
+    // Swap model content and readOnly
+    if (newContent !== null) {
+      const model = editor.getModel();
+      if (model) model.setValue(newContent);
+    } else {
+      // Switching back to solution — restore user's code
+      const model = editor.getModel();
+      if (model && model.getValue() !== code) model.setValue(code);
+    }
+    editor.updateOptions({
+      readOnly: isReadOnly,
+      domReadOnly: isReadOnly,
+      cursorStyle: isReadOnly ? "line-thin" : "line",
+    });
+    editor.setScrollPosition({ scrollTop: 0 });
+  }, [fileTab, currentStage, stages, problem?.unitTestCode]);
+
+  // Keep the editor model in sync with `code` state while on the solution tab
+  // (handles external updates like Reset and draft load)
+  useEffect(() => {
+    if (fileTab !== "solution") return;
+    const editor = solutionEditorRef.current;
+    if (!editor) return;
+    const model = editor.getModel();
+    if (model && model.getValue() !== code) model.setValue(code);
+  }, [code, fileTab]);
+
   const submitStageMutation = trpc.problems.submitStage.useMutation({
     onSuccess: (data) => {
       setTestResults(data.results);
@@ -931,33 +889,17 @@ export default function ProblemDetail() {
                           </div>
                         )}
                         {/* Solution code */}
-                        <div className="rounded-lg overflow-hidden border border-[#3a3a3a]">
-                          <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3a3a3a]">
-                            <Code2 className="w-3.5 h-3.5 text-primary" />
-                            <span className="text-xs font-medium text-muted-foreground">
-                              {activeVariant ? activeVariant.label : "solution.py"}
-                            </span>
+                       <div className="rounded-lg overflow-hidden border border-[#3a3a3a]">
+                         <div className="flex items-center gap-2 px-3 py-2 bg-[#252526] border-b border-[#3a3a3a]">
+                           <Code2 className="w-3.5 h-3.5 text-primary" />
+                           <span className="text-xs font-medium text-muted-foreground">
+                             {activeVariant ? activeVariant.label : "solution.py"}
+                           </span>
+                         </div>
+                          <div className="prose prose-sm prose-invert max-w-none overflow-auto max-h-[500px]">
+                            <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{`\`\`\`python\n${displaySolution ?? ""}\n\`\`\``}</Streamdown>
                           </div>
-                          <Editor
-                            height="400px"
-                            defaultLanguage="python"
-                            language="python"
-                            value={displaySolution ?? ""}
-                            theme="vs-dark"
-                            options={{
-                              fontSize: 13,
-                              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                              minimap: { enabled: false },
-                              scrollBeyondLastLine: false,
-                              lineNumbers: "on",
-                              readOnly: true,
-                              domReadOnly: true,
-                              wordWrap: "on",
-                              padding: { top: 10, bottom: 10 },
-                              scrollbar: { vertical: "hidden", alwaysConsumeMouseWheel: false },
-                            }}
-                          />
-                        </div>
+                       </div>
                       </>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-4">
@@ -1105,65 +1047,33 @@ export default function ProblemDetail() {
 
                  {/* Monaco editor — single full-height editor, content driven by fileTab */}
                  <div className="flex-1 overflow-hidden">
-                   {/* solution.py — editable, always mounted to preserve editor state */}
-                   <div style={{
-                     position: fileTab === "solution" ? "relative" : "absolute",
-                     inset: 0,
-                     height: "100%",
-                     display: "flex",
-                     flexDirection: "column",
-                     visibility: fileTab === "solution" ? "visible" : "hidden",
-                     pointerEvents: fileTab === "solution" ? "auto" : "none",
-                     zIndex: fileTab === "solution" ? 1 : 0,
-                   }}>
-                     <Editor
-                       height="100%"
-                       defaultLanguage="python"
-                       language="python"
-                       value={currentCode}
-                       onChange={(val) => setCode(val ?? "")}
-                       onMount={handleEditorMount}
-                       theme="vs-dark"
-                       options={{
-                         fontSize: 14,
-                         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                         fontLigatures: true,
-                         minimap: { enabled: false },
-                         scrollBeyondLastLine: false,
-                         lineNumbers: "on",
-                         renderLineHighlight: "line",
-                         tabSize: 4,
-                         insertSpaces: true,
-                         wordWrap: "on",
-                         padding: { top: 12, bottom: 12 },
-                         smoothScrolling: true,
-                         cursorBlinking: "smooth",
-                         bracketPairColorization: { enabled: true },
-                       }}
-                     />
-                   </div>
-                   {/* Read-only viewer: base_class.py / test_level_N.py / test_cases.py */}
-                   {/* Read-only editors — always mounted, visibility toggled via display:none.
-                       Prevents Monaco from losing font measurement state on remount. */}
-                   {isStaged && currentStage && (
-                     <ReadOnlyEditor
-                       content={currentStage.baseClass}
-                       visible={fileTab === "base_class"}
-                     />
-                   )}
-                   {isStaged && stages && stages.map((s) => (
-                     <ReadOnlyEditor
-                       key={`test_level_${s.stageNumber}`}
-                       content={s.testFileContent ?? `# Tests for Stage ${s.stageNumber}\n# (Test content not available)`}
-                       visible={fileTab === `test_level_${s.stageNumber}`}
-                     />
-                   ))}
-                   {!isStaged && (
-                     <ReadOnlyEditor
-                       content={problem?.unitTestCode ?? "# Unit tests not available"}
-                       visible={fileTab === "tests"}
-                     />
-                   )}
+                   {/* Single Monaco editor — content and readOnly swapped on tab change */}
+                   <Editor
+                     height="100%"
+                     defaultLanguage="python"
+                     language="python"
+                     defaultValue={currentCode}
+                     onChange={(val) => { if (fileTab === "solution") setCode(val ?? ""); }}
+                     onMount={handleEditorMount}
+                     theme="vs-dark"
+                     options={{
+                       fontSize: 14,
+                       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                       fontLigatures: true,
+                       minimap: { enabled: false },
+                       scrollBeyondLastLine: false,
+                       lineNumbers: "on",
+                       renderLineHighlight: "line",
+                       tabSize: 4,
+                       insertSpaces: true,
+                       wordWrap: "on",
+                       padding: { top: 12, bottom: 12 },
+                       smoothScrolling: true,
+                       cursorBlinking: "smooth",
+                       bracketPairColorization: { enabled: true },
+                       automaticLayout: true,
+                     }}
+                   />
                  </div>
 
                   {/* Always-visible bottom tab strip
