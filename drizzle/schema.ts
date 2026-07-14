@@ -75,6 +75,18 @@ export const submissions = mysqlTable("submissions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const stageSubmissions = mysqlTable("stage_submissions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  problemId: int("problemId").notNull(),
+  stageId: int("stageId").notNull(),
+  stageNumber: int("stageNumber").notNull(),
+  code: text("code").notNull(),
+  status: mysqlEnum("status", ["accepted", "wrong_answer", "error"]).notNull(),
+  testResults: text("testResults").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Problem = typeof problems.$inferSelect;
@@ -112,3 +124,11 @@ export type ProblemStage = typeof problemStages.$inferSelect;
 export type InsertProblemStage = typeof problemStages.$inferInsert;
 export type StageTestCase = typeof stageTestCases.$inferSelect;
 export type InsertStageTestCase = typeof stageTestCases.$inferInsert;
+export type StageSubmission = typeof stageSubmissions.$inferSelect;
+export type InsertStageSubmission = typeof stageSubmissions.$inferInsert;
+
+export const stageSubmissionsRelations = relations(stageSubmissions, ({ one }) => ({
+  user: one(users, { fields: [stageSubmissions.userId], references: [users.id] }),
+  problem: one(problems, { fields: [stageSubmissions.problemId], references: [problems.id] }),
+  stage: one(problemStages, { fields: [stageSubmissions.stageId], references: [problemStages.id] }),
+}));

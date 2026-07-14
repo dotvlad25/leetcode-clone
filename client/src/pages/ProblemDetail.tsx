@@ -24,7 +24,7 @@ import {
   Code2, FlaskConical, ChevronDown, BookOpen, Lightbulb, Save,
 } from "lucide-react";
 import { RotateCcw } from "lucide-react";
-import { Layers, ChevronRight } from "lucide-react";
+import { Layers, ChevronRight, Lock, Unlock } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -68,7 +68,11 @@ type AIAnalysis = {
   styleIssues: string[];
   improvements: string[];
   optimizedApproach: string;
+  nextMethodHint?: string;
+  baseClassUsage?: string;
 };
+
+// ── Terminal / Output Tab ──────────────────────────────────────────────────────
 
 // ── Terminal / Output Tab ──────────────────────────────────────────────────────
 function TerminalPanel({ output, isRunning }: { output: string; isRunning: boolean }) {
@@ -250,6 +254,21 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
           </ul>
         </div>
       )}
+      {analysis.nextMethodHint && (
+        <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-1">
+          <h4 className="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Lightbulb className="w-3.5 h-3.5" />
+            Next Step Hint
+          </h4>
+          <p className="text-sm text-foreground">{analysis.nextMethodHint}</p>
+        </div>
+      )}
+      {analysis.baseClassUsage && (
+        <div className="space-y-1">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Base Class Usage</h4>
+          <p className="text-sm text-foreground">{analysis.baseClassUsage}</p>
+        </div>
+      )}
       <div className="space-y-1">
         <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Optimal Approach</h4>
         <p className="text-sm text-foreground">{analysis.optimizedApproach}</p>
@@ -259,12 +278,16 @@ function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null;
 }
 
 // ── Submission History Panel ───────────────────────────────────────────────────
-function SubmissionHistoryPanel({ slug }: { slug: string }) {
+function SubmissionHistoryPanel({ slug, isStaged }: { slug: string; isStaged: boolean }) {
   const { isAuthenticated } = useAuth();
-  const { data: history, isLoading } = trpc.problems.submissionHistory.useQuery(
-    { slug },
-    { enabled: isAuthenticated }
+  const { data: genericHistory, isLoading: genericLoading } = trpc.problems.submissionHistory.useQuery(
+    { slug }, { enabled: isAuthenticated && !isStaged }
   );
+  const { data: stageHistory, isLoading: stageLoading } = trpc.problems.stageSubmissionHistory.useQuery(
+    { slug }, { enabled: isAuthenticated && isStaged }
+  );
+  const history = isStaged ? stageHistory : genericHistory;
+  const isLoading = isStaged ? stageLoading : genericLoading;
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-16">
@@ -321,6 +344,11 @@ function SubmissionHistoryPanel({ slug }: { slug: string }) {
           </div>
         );
       })}
+      {isStaged && stageHistory && (
+        <p className="text-xs text-muted-foreground text-center pt-1">
+          Showing stage-level submissions. Use Submit on each stage to track progress.
+        </p>
+      )}
     </div>
   );
 }
@@ -343,6 +371,14 @@ export default function ProblemDetail() {
   useEffect(() => {
     if (stages && stages.length > 0) setCurrentStageNumber(1);
   }, [problem?.id]);
+
+  // ── Unlock gating ────────────────────────────────────────────────────────────
+  const { data: unlockStatus, refetch: refetchUnlockStatus } = trpc.problems.getStageUnlockStatus.useQuery(
+    { slug },
+    { enabled: isAuthenticated && isStaged }
+  );
+  const highestUnlockedStage = unlockStatus?.highestUnlockedStage ?? 1;
+  const isCurrentStageLocked = isStaged && currentStageNumber > highestUnlockedStage;
 
   // ── localStorage draft persistence ──────────────────────────────────────────
   const draftKey = `pycode-draft-${slug}`;
@@ -405,6 +441,37 @@ export default function ProblemDetail() {
     },
     [problem, code]
   );
+
+  const submitStageMutation = trpc.problems.submitStage.useMutation({
+    onSuccess: (data) => {
+      setTestResults(data.results);
+      setSubmitStatus(data.status);
+      setTerminalOutput(data.terminalOutput);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
+      if (data.status === "accepted") {
+        if (data.justUnlockedNextStage && data.nextStageNumber) {
+          toast.success(`🎉 Stage ${data.stageNumber} complete! Stage ${data.nextStageNumber} is now unlocked.`, { duration: 5000 });
+        } else if (data.stageProgress && data.stageProgress.completedStages.length === data.stageProgress.totalStages) {
+          toast.success(`🏆 All stages complete! Problem solved!`, { duration: 6000 });
+        } else {
+          toast.success(`Stage ${data.stageNumber} accepted! All tests passed.`);
+        }
+        refetchUnlockStatus();
+      } else {
+        const passed = data.results.filter((r: TestResult) => r.passed).length;
+        toast.error(`Wrong Answer — ${passed}/${data.results.length} tests passed`);
+      }
+    },
+    onError: (err) => {
+      setTerminalOutput(`❌ Submit error:\n${err.message}`);
+      setActiveBottomTab("output");
+      bottomPanelRef.current?.expand();
+      setBottomOpen(true);
+      toast.error(`Submit error: ${err.message}`);
+    },
+  });
 
   const runStageMutation = trpc.problems.runStageTests.useMutation({
     onSuccess: (data) => {
@@ -485,7 +552,7 @@ export default function ProblemDetail() {
   });
 
   const currentCode = code || problem?.starterCode || "";
-  const isRunning = runMutation.isPending || submitMutation.isPending || runStageMutation.isPending;
+  const isRunning = runMutation.isPending || submitMutation.isPending || runStageMutation.isPending || submitStageMutation.isPending;
   const isAnalyzing = analyzeMutation.isPending;
 
   // Parse solution variants (JSON stored as text column)
@@ -507,6 +574,7 @@ export default function ProblemDetail() {
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
     if (isStaged) {
+      if (isCurrentStageLocked) return toast.error(`Complete Stage ${currentStageNumber - 1} first to unlock this stage.`);
       runStageMutation.mutate({ slug, code: currentCode, stageNumber: currentStageNumber });
     } else {
       runMutation.mutate({ slug, code: currentCode });
@@ -518,7 +586,8 @@ export default function ProblemDetail() {
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
     if (isStaged) {
-      runStageMutation.mutate({ slug, code: currentCode, stageNumber: currentStageNumber });
+      if (isCurrentStageLocked) return toast.error(`Complete Stage ${currentStageNumber - 1} first to unlock this stage.`);
+      submitStageMutation.mutate({ slug, code: currentCode, stageNumber: currentStageNumber });
     } else {
       submitMutation.mutate({ slug, code: currentCode });
     }
@@ -527,7 +596,15 @@ export default function ProblemDetail() {
   const handleAnalyze = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setActiveBottomTab("ai");
-    analyzeMutation.mutate({ slug, code: currentCode });
+    analyzeMutation.mutate({
+      slug,
+      code: currentCode,
+      ...(isStaged && currentStage ? {
+        stageNumber: currentStageNumber,
+        baseClass: currentStage.baseClass,
+        stageTitle: currentStage.title,
+      } : {}),
+    });
   };
 
   if (isLoading) {
@@ -622,6 +699,13 @@ export default function ProblemDetail() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+              {/* Locked stage warning banner */}
+              {isCurrentStageLocked && (
+                <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 text-xs">
+                  <Lock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Stage {currentStageNumber} is locked. Complete Stage {currentStageNumber - 1} to unlock.</span>
                 </div>
               )}
               <div className="flex-1 overflow-y-auto overflow-x-hidden p-5">
@@ -774,7 +858,7 @@ export default function ProblemDetail() {
                       </button>
                       <button
                         onClick={handleRun}
-                        disabled={isRunning}
+                        disabled={isRunning || isCurrentStageLocked}
                         className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-[#2d2d2d] transition-colors disabled:opacity-50"
                       >
                         {isRunning && runMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
@@ -782,7 +866,7 @@ export default function ProblemDetail() {
                       </button>
                       <button
                         onClick={handleSubmit}
-                        disabled={isRunning}
+                        disabled={isRunning || isCurrentStageLocked}
                         className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] bg-primary/90 text-primary-foreground hover:bg-primary transition-colors disabled:opacity-50"
                       >
                         {isRunning && submitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
@@ -1006,7 +1090,7 @@ export default function ProblemDetail() {
                     </TabsContent>
                     <TabsContent value="history" className="h-full m-0 overflow-hidden">
                       <div className="h-full overflow-y-auto overflow-x-hidden">
-                        <SubmissionHistoryPanel slug={slug} />
+                        <SubmissionHistoryPanel slug={slug} isStaged={isStaged} />
                       </div>
                     </TabsContent>
                   </div>

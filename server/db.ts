@@ -1,8 +1,9 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users, problems, testCases, submissions, InsertSubmission,
   problemStages, stageTestCases, InsertProblemStage, InsertStageTestCase,
+  stageSubmissions, InsertStageSubmission,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -235,4 +236,121 @@ export async function seedStagedProblemIfNotExists(
     }
   }
   console.log(`[Seed] Seeded staged problem: ${problemData.title} (${stages.length} stages)`);
+}
+// ── Stage Submissions ──────────────────────────────────────────────────────
+
+export async function createStageSubmission(data: InsertStageSubmission) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(stageSubmissions).values({
+    ...data,
+    testResults: data.testResults ?? "[]",
+  });
+  return result;
+}
+
+/**
+ * Returns { completedStages: number[], totalStages: number } for a user on a staged problem.
+ * completedStages is the list of stageNumbers that have at least one 'accepted' submission.
+ */
+export async function getStageProgress(userId: number, problemId: number) {
+  const db = await getDb();
+  if (!db) return { completedStages: [], totalStages: 0 };
+  const [allStages, acceptedRows] = await Promise.all([
+    db.select({ stageNumber: problemStages.stageNumber })
+      .from(problemStages)
+      .where(eq(problemStages.problemId, problemId))
+      .orderBy(problemStages.stageNumber),
+    db.select({ stageNumber: stageSubmissions.stageNumber })
+      .from(stageSubmissions)
+      .where(
+        and(
+          eq(stageSubmissions.userId, userId),
+          eq(stageSubmissions.problemId, problemId),
+          eq(stageSubmissions.status, "accepted")
+        )
+      ),
+  ]);
+  const completedSet = new Set(acceptedRows.map(r => r.stageNumber));
+  return {
+    completedStages: Array.from(completedSet).sort((a, b) => a - b),
+    totalStages: allStages.length,
+  };
+}
+
+/**
+ * Returns the highest stage number the user is allowed to attempt.
+ * Stage 1 is always unlocked. Stage N+1 unlocks when stage N is accepted.
+ */
+export async function getHighestUnlockedStage(userId: number, problemId: number): Promise<number> {
+  const progress = await getStageProgress(userId, problemId);
+  if (progress.totalStages === 0) return 1;
+  // Unlock up to (max completed + 1), capped at totalStages
+  const maxCompleted = progress.completedStages.length > 0
+    ? Math.max(...progress.completedStages)
+    : 0;
+  return Math.min(maxCompleted + 1, progress.totalStages);
+}
+
+/** Returns the last N stage submissions for a user on a problem, newest first. */
+export async function getStageSubmissionsForUser(userId: number, problemId: number, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(stageSubmissions)
+    .where(
+      and(
+        eq(stageSubmissions.userId, userId),
+        eq(stageSubmissions.problemId, problemId)
+      )
+    )
+    .orderBy(desc(stageSubmissions.createdAt))
+    .limit(limit);
+}
+
+/**
+ * Returns stage progress for multiple problems at once (for the problems list).
+ * Returns a map of problemId -> { completedStages, totalStages }.
+ */
+export async function getBulkStageProgress(
+  userId: number,
+  problemIds: number[]
+): Promise<Map<number, { completedStages: number[]; totalStages: number }>> {
+  const db = await getDb();
+  const result = new Map<number, { completedStages: number[]; totalStages: number }>();
+  if (!db || problemIds.length === 0) return result;
+
+  const [allStages, acceptedRows] = await Promise.all([
+    db.select({ problemId: problemStages.problemId, stageNumber: problemStages.stageNumber })
+      .from(problemStages)
+      .where(inArray(problemStages.problemId, problemIds)),
+    db.select({ problemId: stageSubmissions.problemId, stageNumber: stageSubmissions.stageNumber })
+      .from(stageSubmissions)
+      .where(
+        and(
+          eq(stageSubmissions.userId, userId),
+          inArray(stageSubmissions.problemId, problemIds),
+          eq(stageSubmissions.status, "accepted")
+        )
+      ),
+  ]);
+
+  // Build total stages per problem
+  const totalsMap = new Map<number, number>();
+  for (const row of allStages) {
+    totalsMap.set(row.problemId, (totalsMap.get(row.problemId) ?? 0) + 1);
+  }
+  // Build completed stages per problem
+  const completedMap = new Map<number, Set<number>>();
+  for (const row of acceptedRows) {
+    if (!completedMap.has(row.problemId)) completedMap.set(row.problemId, new Set());
+    completedMap.get(row.problemId)!.add(row.stageNumber);
+  }
+
+  for (const pid of problemIds) {
+    result.set(pid, {
+      completedStages: Array.from(completedMap.get(pid) ?? new Set<number>()).sort((a, b) => (a as number) - (b as number)),
+      totalStages: totalsMap.get(pid) ?? 0,
+    });
+  }
+  return result;
 }

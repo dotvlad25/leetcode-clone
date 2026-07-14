@@ -4,7 +4,8 @@ import { trpc } from "@/lib/trpc";
 import NavBar from "@/components/NavBar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, Circle } from "lucide-react";
+import { CheckCircle2, Circle, Layers } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const cls =
@@ -19,6 +20,7 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
 
 export default function Problems() {
   const { data: problems, isLoading } = trpc.problems.list.useQuery();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -69,16 +71,38 @@ export default function Problems() {
                        {p.title}
                      </span>
                      {p.isStaged ? (
-                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-blue-500/40 text-blue-400 bg-blue-500/10 leading-none">
-                         STAGED
-                       </span>
-                     ) : null}
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-blue-500/40 text-blue-400 bg-blue-500/10 leading-none">
+                        STAGED
+                      </span>
+                    ) : null}
                    </div>
                     <div className="flex items-center">
                       <DifficultyBadge difficulty={p.difficulty} />
                     </div>
                     <div className="flex items-center justify-end text-sm text-muted-foreground">
-                      —
+                      {p.isStaged && p.stageProgress ? (
+                        <div className="flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                          <span className={`text-xs font-medium tabular-nums ${
+                            p.stageProgress.completedStages.length === p.stageProgress.totalStages && p.stageProgress.totalStages > 0
+                              ? "text-primary"
+                              : p.stageProgress.completedStages.length > 0
+                              ? "text-blue-400"
+                              : "text-muted-foreground"
+                          }`}>
+                            {p.stageProgress.completedStages.length}/{p.stageProgress.totalStages}
+                          </span>
+                        </div>
+                      ) : p.isStaged ? (
+                        <div className="flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                          <span className="text-xs text-muted-foreground/40">
+                            {user ? "0/?" : "—"}
+                          </span>
+                        </div>
+                      ) : (
+                        <span>—</span>
+                      )}
                     </div>
                   </div>
                 </Link>

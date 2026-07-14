@@ -76,3 +76,15 @@
 - [x] Seed In-Memory Database (4 stages)
 - [x] Seed Bank System (4 stages)
 - [x] Seed LRU Cache + Task Manager (3 stages)
+
+## Stage Enhancements (NEW)
+- [x] Add stage_submissions table (userId, problemId, stageId, stageNumber, code, status, createdAt)
+- [x] Add DB helpers: createStageSubmission, getStageProgress, getHighestUnlockedStage
+- [x] Update problems.list to return stageProgress { completed, total } per staged problem
+- [x] Add submitStage protected procedure that saves per-stage submission and returns unlock status
+- [x] Frontend: show 'Stage X/N complete' in problems list for staged problems
+- [x] Frontend: lock stages N+1 in stage selector (greyed out, lock icon) until stage N is passed
+- [x] Frontend: block Run/Submit buttons when on a locked stage
+- [x] Frontend: show unlock celebration toast when a stage is passed
+- [x] Update analyzeCode to accept optional stageNumber + baseClass for stage-aware AI hints
+- [x] AI prompt: include current stage base class, suggest next abstract method to implement
