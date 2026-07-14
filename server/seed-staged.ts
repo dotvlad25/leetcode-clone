@@ -16,7 +16,6 @@ type StageSeed = {
 function generateTestFileContent(problemTitle: string, stage: StageSeed): string {
   const lines: string[] = [
     "import unittest",
-    "import sys",
     "",
     `# Test file for: ${problemTitle}`,
     `# Stage ${stage.stageNumber}: ${stage.title}`,
@@ -35,15 +34,18 @@ function generateTestFileContent(problemTitle: string, stage: StageSeed): string
   lines.push("");
   for (const tc of stage.testCases) {
     const desc = tc.description.replace(/\n/g, " ");
+    // Indent each line of inputData by 8 spaces (inside the test method)
+    const bodyLines = tc.inputData
+      .split("\\n")
+      .map(l => `        ${l}`);
     lines.push(`class Test_Stage${stage.stageNumber}_Case${testNum}(unittest.TestCase):`);
     lines.push(`    """`);
     lines.push(`    ${desc}`);
     lines.push(`    Expected: ${tc.expectedOutput}`);
     lines.push(`    """`);
     lines.push(`    def test(self):`);
-    lines.push(`        ns = {**globals()}`);
-    lines.push(`        exec(${JSON.stringify(tc.inputData)}, ns)`);
-    lines.push(`        self.assertEqual(ns.get('_result'), ${tc.expectedOutput})`);
+    lines.push(...bodyLines);
+    lines.push(`        self.assertEqual(_result, ${tc.expectedOutput})`);
     lines.push("");
     testNum++;
   }
