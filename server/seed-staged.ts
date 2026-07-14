@@ -38,13 +38,12 @@ function generateTestFileContent(problemTitle: string, stage: StageSeed): string
     lines.push(`class Test_Stage${stage.stageNumber}_Case${testNum}(unittest.TestCase):`);
     lines.push(`    """`);
     lines.push(`    ${desc}`);
-    lines.push(`    Expected output:`);
-    lines.push(`      ${JSON.stringify(tc.expectedOutput)}`);
+    lines.push(`    Expected: ${tc.expectedOutput}`);
     lines.push(`    """`);
     lines.push(`    def test(self):`);
     lines.push(`        ns = {**globals()}`);
     lines.push(`        exec(${JSON.stringify(tc.inputData)}, ns)`);
-    lines.push(`        self.assertEqual(ns.get('_result'), ${JSON.stringify(tc.expectedOutput)})`);
+    lines.push(`        self.assertEqual(ns.get('_result'), ${tc.expectedOutput})`);
     lines.push("");
     testNum++;
   }
