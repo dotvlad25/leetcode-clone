@@ -149,3 +149,11 @@
 - [x] Re-seed Resize and Flatten problems with corrected solutions and test expected outputs
 - [x] Verify all 25 new reference solution tests pass (3 problems, 7 stages)
 - [x] All 11 vitest tests still pass after changes
+
+## Filter Bar (NEW)
+- [x] Company filter pills (Anthropic, Figma — dynamically derived from loaded problems)
+- [x] Difficulty filter pills (Easy, Medium, Hard — multi-select toggle)
+- [x] Status filter pills (All / Solved / Unsolved)
+- [x] Clear All button visible when any filter is active
+- [x] Problem count updates to "X of Y problems" when filters are active
+- [x] Empty state with "Clear filters" link when no results match
