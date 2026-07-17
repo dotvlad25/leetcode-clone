@@ -4009,6 +4009,281 @@ export async function seedFigmaProblems(): Promise<void> {
     ]
   );
 
+  // ── 15. Resize Stacked Rectangles — Distribute Height ─────────────────────
+  await seedStagedProblemIfNotExists(
+    {
+      number: 15001,
+      slug: "resize-stacked-rectangles",
+      title: "Resize Stacked Rectangles",
+      difficulty: "Medium",
+      description: `## Resize Stacked Rectangles — Distribute Height\n\nIn Figma, when you resize a group of stacked rectangles, the height change must be **distributed evenly** across all elements — but no element can shrink below a minimum height of 1.\n\n**Stages:**\n1. Distribute a signed \`resize\` delta across rectangle heights: positive splits evenly; negative shrinks greedily, clamping at 1 and redistributing the remainder.\n2. Each rectangle also has a \`y\`-coordinate. After resizing, recompute positions so the **relative gaps** between rectangles are preserved (accounting for each rectangle's new height).\n\nThis problem tests greedy simulation and careful coordinate arithmetic.`,
+      starterCode: `class RectangleResizer:\n    def resize(self, heights: list[int], delta: int) -> list[int]:\n        pass\n`,
+      tags: "figma,array,greedy,simulation",
+      badges: "figma",
+    },
+    [
+      {
+        stageNumber: 1,
+        title: "Distribute Resize Delta",
+        description: `## Stage 1: Distribute Resize Delta\n\nImplement \`resize(heights, delta)\` — distribute a signed integer \`delta\` across a list of rectangle heights (each ≥ 1).\n\n**Rules:**\n- If \`delta > 0\`: add \`delta / len(heights)\` to each height (even split, result may be float).\n- If \`delta < 0\`: shrink as evenly as possible, but never let any height drop below 1. Rectangles that would go below 1 are clamped at 1; the unabsorbed remainder is redistributed among the rectangles that still have room. Repeat until the full delta is absorbed or all are clamped.\n- If \`delta == 0\`: return heights unchanged.\n\n\`\`\`python\nr = RectangleResizer()\nprint(r.resize([3, 5, 10, 9], -12))  # [1, 1, 7, 6]\n# The two smallest clamp to 1 (absorbing 2+4=6 of the 12);\n# the remaining 6 is split evenly over [10, 9] -> [7, 6]\n\`\`\``,
+        baseClass: `from abc import ABC, abstractmethod\n\nclass RectangleResizerBase(ABC):\n    @abstractmethod\n    def resize(self, heights: list[int], delta: int) -> list[int]:\n        """Distribute delta across heights; no height may drop below 1.\"\"\"\n        ...\n`,
+        starterCode: `class RectangleResizer(RectangleResizerBase):\n    def resize(self, heights: list[int], delta: int) -> list[int]:\n        # TODO: implement\n        pass\n`,
+        solution: `class RectangleResizer(RectangleResizerBase):\n    def resize(self, heights: list[int], delta: int) -> list[int]:\n        # Work on a mutable copy so we don't mutate the input.\n        result = list(heights)\n        n = len(result)\n\n        if delta == 0 or n == 0:\n            return result\n\n        if delta > 0:\n            # Positive delta: integer floor division, then give remainder to tallest.\n            per = delta // n\n            rem = delta % n\n            result = [h + per for h in result]\n            if rem:\n                # Distribute 1 extra to the rem tallest rectangles.\n                by_height = sorted(range(n), key=lambda i: -result[i])\n                for i in range(rem):\n                    result[by_height[i]] += 1\n            return result\n\n        # Negative delta: sort by height ascending, process smallest first.\n        remaining = -delta  # positive amount to remove\n        indices = sorted(range(n), key=lambda i: result[i])\n\n        for k, idx in enumerate(indices):\n            active = n - k  # rects not yet clamped\n            per = remaining // active  # integer floor share per rect\n            rem = remaining % active   # leftover after floor division\n\n            can_absorb = result[idx] - 1  # max this rect can shrink\n            if per >= can_absorb:\n                # This rect must clamp to 1; absorb what it can.\n                remaining -= can_absorb\n                result[idx] = 1\n            else:\n                # All remaining active rects can absorb their share.\n                for j in range(k, n):\n                    result[indices[j]] -= per\n                # Spread the integer remainder to the smallest active rects.\n                for j in range(rem):\n                    result[indices[k + j]] -= 1\n                remaining = 0\n                break\n\n        return result\n`,
+        solutionExplanation: "Positive delta: integer floor division per rect, remainder goes to the tallest rects. Negative delta: sort by height ascending, process smallest first — compute per=remaining//active, clamp if per>=can_absorb, otherwise distribute per to all active rects and spread the integer remainder to the smallest ones.",
+        testCases: [
+          {
+            description: "negative delta clamps smallest rects and redistributes remainder",
+            inputData: `r = RectangleResizer()\n_result = r.resize([3, 5, 10, 9], -12)`,
+            expectedOutput: `[1, 1, 7, 6]`,
+            orderIndex: 0,
+          },
+          {
+            description: "positive delta splits evenly",
+            inputData: `r = RectangleResizer()\n_result = r.resize([4, 6, 10], 12)`,
+            expectedOutput: `[8, 10, 14]`,
+            orderIndex: 1,
+          },
+          {
+            description: "delta zero returns heights unchanged",
+            inputData: `r = RectangleResizer()\n_result = r.resize([5, 5, 5], 0)`,
+            expectedOutput: `[5, 5, 5]`,
+            orderIndex: 2,
+          },
+          {
+            description: "all rects clamp to 1 when delta exceeds total shrinkable capacity",
+            inputData: `r = RectangleResizer()\n_result = r.resize([2, 2, 2], -100)`,
+            expectedOutput: `[1, 1, 1]`,
+            orderIndex: 3,
+          },
+        ],
+      },
+      {
+        stageNumber: 2,
+        title: "Preserve Relative Positions",
+        description: `## Stage 2: Preserve Relative Positions\n\nExtend to \`resize_with_positions(rects, delta)\` where each rect is \`{"id": str, "y": float, "h": float}\`.\n\nAfter resizing the heights (using the Stage 1 logic), **recompute the y-coordinates** so that the original **gaps** between consecutive rectangles are preserved.\n\n**Gap definition:** the gap between rect[i] and rect[i+1] is \`rect[i+1].y - (rect[i].y + rect[i].h)\`. This gap must remain the same after resizing.\n\n**Algorithm:**\n1. Sort rects by \`y\` (ascending).\n2. Apply Stage 1 \`resize\` to get new heights.\n3. Starting from the first rect's original \`y\`, recompute each subsequent rect's \`y\` as \`prev_y + new_h + gap\`.\n\n\`\`\`python\nr = RectangleResizer()\nrects = [\n    {"id": "A", "y": 0,  "h": 3},\n    {"id": "B", "y": 5,  "h": 5},   # gap = 5 - (0+3) = 2\n    {"id": "C", "y": 12, "h": 10},  # gap = 12 - (5+5) = 2\n    {"id": "D", "y": 24, "h": 9},   # gap = 24 - (12+10) = 2\n]\nresult = r.resize_with_positions(rects, -12)\n# new heights: [1, 1, 7, 6]; gaps stay at 2\n# A: y=0,h=1  B: y=3,h=1  C: y=6,h=7  D: y=15,h=6\n\`\`\``,
+        baseClass: `from abc import ABC, abstractmethod\n\nclass RectangleResizerBase(ABC):\n    @abstractmethod\n    def resize(self, heights: list[int], delta: int) -> list[int]:\n        ...\n\n    @abstractmethod\n    def resize_with_positions(self, rects: list[dict], delta: int) -> list[dict]:\n        \"\"\"Return list of {id, y, h} with updated heights and recomputed y-coords.\"\"\"\n        ...\n`,
+        starterCode: `class RectangleResizer(RectangleResizerBase):\n    def resize(self, heights: list[int], delta: int) -> list[int]:\n        # Copy your Stage 1 solution here.\n        pass\n\n    def resize_with_positions(self, rects: list[dict], delta: int) -> list[dict]:\n        # TODO: implement\n        pass\n`,
+        solution: `class RectangleResizer(RectangleResizerBase):\n    def resize(self, heights: list[int], delta: int) -> list[int]:\n        result = list(heights)\n        n = len(result)\n        if delta == 0 or n == 0:\n            return result\n        if delta > 0:\n            per_rect = delta / n\n            return [h + per_rect for h in result]\n        remaining = -delta\n        while remaining > 0:\n            shrinkable = [i for i, h in enumerate(result) if h > 1]\n            if not shrinkable:\n                break\n            per_rect = remaining / len(shrinkable)\n            absorbed = 0\n            for i in shrinkable:\n                can_absorb = result[i] - 1\n                actual = min(per_rect, can_absorb)\n                result[i] -= actual\n                absorbed += actual\n            remaining -= absorbed\n            if absorbed == 0:\n                break\n        return result\n\n    def resize_with_positions(self, rects: list[dict], delta: int) -> list[dict]:\n        # Sort by y so we process top-to-bottom.\n        sorted_rects = sorted(rects, key=lambda r: r["y"])\n\n        # Compute the gap between consecutive rects BEFORE resizing.\n        gaps = []\n        for i in range(len(sorted_rects) - 1):\n            gap = sorted_rects[i + 1]["y"] - (sorted_rects[i]["y"] + sorted_rects[i]["h"])\n            gaps.append(gap)\n\n        # Resize heights using Stage 1 logic.\n        old_heights = [r["h"] for r in sorted_rects]\n        new_heights = self.resize(old_heights, delta)\n\n        # Recompute y-coordinates preserving gaps.\n        result = []\n        current_y = sorted_rects[0]["y"]  # first rect keeps its y\n        for i, rect in enumerate(sorted_rects):\n            result.append({"id": rect["id"], "y": current_y, "h": new_heights[i]})\n            if i < len(gaps):\n                current_y += new_heights[i] + gaps[i]\n\n        return result\n`,
+        solutionExplanation: "Sort by y, record gaps between consecutive rects, resize heights with Stage 1, then recompute y from the top: y[i+1] = y[i] + new_h[i] + gap[i].",
+        testCases: [
+          {
+            description: "positions recomputed preserving gaps after negative delta",
+            inputData: `r = RectangleResizer()\nrects = [{"id":"A","y":0,"h":3},{"id":"B","y":5,"h":5},{"id":"C","y":12,"h":10},{"id":"D","y":24,"h":9}]\nresult = r.resize_with_positions(rects, -12)\n_result = [(x["id"], x["y"], x["h"]) for x in result]`,
+            expectedOutput: `[("A", 0, 1), ("B", 3, 1), ("C", 6, 7), ("D", 15, 6)]`,
+            orderIndex: 0,
+          },
+          {
+            description: "positive delta grows all rects and preserves gaps",
+            inputData: `r = RectangleResizer()\nrects = [{"id":"X","y":0,"h":4},{"id":"Y","y":6,"h":4}]\nresult = r.resize_with_positions(rects, 8)\n_result = [(x["id"], x["y"], x["h"]) for x in result]`,
+            expectedOutput: `[("X", 0, 8), ("Y", 10, 8)]`,
+            orderIndex: 1,
+          },
+          {
+            description: "single rect: y unchanged, height adjusted",
+            inputData: `r = RectangleResizer()\nrects = [{"id":"A","y":5,"h":10}]\nresult = r.resize_with_positions(rects, -4)\n_result = [(x["id"], x["y"], x["h"]) for x in result]`,
+            expectedOutput: `[("A", 5, 6)]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+    ]
+  );
+
+  // ── 16. File / Folder / Team Permissions — Fewest Grants ──────────────────
+  await seedStagedProblemIfNotExists(
+    {
+      number: 16001,
+      slug: "file-folder-team-permissions-fewest-grants",
+      title: "File / Folder / Team Permissions — Fewest Grants",
+      difficulty: "Medium",
+      description: `## File / Folder / Team Permissions — Fewest Grants\n\nFigma organises assets in a three-level hierarchy: **Teams** contain Folders and Files, **Folders** contain sub-Folders and Files, and **Files** are leaves. Each node carries a list of \`user_ids\` that have been **directly** granted access. Access is **inherited**: a grant on a node covers every descendant.\n\n**Stages:**\n1. \`init(teams, folders, files)\` + \`get_fewest(user_id)\` — return the *topmost* nodes that together cover all the user's accessible content (no redundant descendants).\n2. \`move_file(file_id, new_parent_id)\` — move a file to a new parent and re-answer \`get_fewest\` queries correctly.\n\nThis problem tests tree construction, DFS, and pruning.`,
+      starterCode: `class PermissionSystem:\n    def init(self, teams, folders, files):\n        pass\n\n    def get_fewest(self, user_id: str) -> list[str]:\n        pass\n`,
+      tags: "figma,tree,dfs,object-design",
+      badges: "figma",
+    },
+    [
+      {
+        stageNumber: 1,
+        title: "Build Hierarchy and Get Fewest Grants",
+        description: `## Stage 1: Build Hierarchy and Get Fewest Grants\n\nImplement a \`PermissionSystem\` class with:\n\n- \`init(teams, folders, files)\` — ingest three flat lists and build the hierarchy internally. Each item has a \`uuid\`, \`user_ids\` (list of users with direct access), and (for Teams/Folders) \`folder_ids\` and \`file_ids\` listing children.\n- \`get_fewest(user_id)\` — return the **minimum set of node UUIDs** (topmost nodes) that together cover all content the user can access. A node is included if the user has direct access to it; once included, all its descendants are implicitly covered and must **not** appear in the result.\n\n\`\`\`python\n# Team1 -> [Folder1(A), Folder2]\n# Folder1 -> [file1(A), file2]\n# Folder2 -> [Folder3(A)]\n# User A has direct access to: Folder1, file1, Folder3\n# get_fewest("A") -> ["Folder1", "Folder3"]\n# (file1 is under Folder1, so it is already covered)\n\`\`\``,
+        baseClass: `from abc import ABC, abstractmethod\n\nclass PermissionSystemBase(ABC):\n    @abstractmethod\n    def init(self, teams: list, folders: list, files: list) -> None:\n        \"\"\"Build the hierarchy from flat lists. Returns nothing.\"\"\"\n        ...\n\n    @abstractmethod\n    def get_fewest(self, user_id: str) -> list[str]:\n        \"\"\"Return the topmost node UUIDs that cover all of user_id's access.\"\"\"\n        ...\n`,
+        starterCode: `class PermissionSystem(PermissionSystemBase):\n    def init(self, teams: list, folders: list, files: list) -> None:\n        # TODO: build the hierarchy\n        pass\n\n    def get_fewest(self, user_id: str) -> list[str]:\n        # TODO: return topmost nodes\n        pass\n`,
+        solution: `class PermissionSystem(PermissionSystemBase):\n    def init(self, teams: list, folders: list, files: list) -> None:\n        # Index all nodes by uuid for O(1) lookup.\n        self._nodes = {}   # uuid -> {type, user_ids, children: [uuid]}\n        self._parent = {}  # uuid -> parent uuid (or None for roots)\n\n        for f in files:\n            self._nodes[f.uuid] = {"type": "file", "user_ids": set(f.user_ids), "children": []}\n            self._parent[f.uuid] = None\n\n        for folder in folders:\n            children = list(folder.folder_ids) + list(folder.file_ids)\n            self._nodes[folder.uuid] = {"type": "folder", "user_ids": set(folder.user_ids), "children": children}\n            self._parent[folder.uuid] = None\n            for child in children:\n                self._parent[child] = folder.uuid\n\n        for team in teams:\n            children = list(team.folder_ids) + list(team.file_ids)\n            self._nodes[team.uuid] = {"type": "team", "user_ids": set(team.user_ids), "children": children}\n            self._parent[team.uuid] = None\n            for child in children:\n                self._parent[child] = team.uuid\n\n        # Identify true roots (nodes with no parent).\n        self._roots = [uid for uid, p in self._parent.items() if p is None and self._nodes[uid]["type"] == "team"]\n\n    def get_fewest(self, user_id: str) -> list[str]:\n        result = []\n\n        def dfs(node_id: str, ancestor_has_access: bool) -> None:\n            node = self._nodes[node_id]\n            has_direct = user_id in node["user_ids"]\n\n            if ancestor_has_access:\n                # Already covered by an ancestor — skip this subtree entirely.\n                return\n\n            if has_direct:\n                # This is the topmost grant point; add it and stop descending.\n                result.append(node_id)\n                return\n\n            # No access here; check children.\n            for child in node["children"]:\n                if child in self._nodes:\n                    dfs(child, False)\n\n        for root in self._roots:\n            dfs(root, False)\n\n        return sorted(result)\n`,
+        solutionExplanation: "Build a node dict and parent map. get_fewest does a DFS from all roots: if an ancestor already has access, skip the subtree. If the current node has direct access, add it to results and stop descending. Otherwise recurse into children.",
+        testCases: [
+          {
+            description: "file covered by parent folder is excluded from fewest grants",
+            inputData: `class Team:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass Folder:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass File:\n    def __init__(self, uuid, user_ids):\n        self.uuid=uuid; self.user_ids=user_ids\nteams=[Team("T1",["F1","F2"],[],[])]\nfolders=[Folder("F1",[],["file1","file2"],["A"]),Folder("F2",["F3"],[],[]),Folder("F3",[],[],["A"])]\nfiles=[File("file1",["A"]),File("file2",[])]\nps=PermissionSystem()\nps.init(teams,folders,files)\n_result=ps.get_fewest("A")`,
+            expectedOutput: `["F1", "F3"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "user with no access returns empty list",
+            inputData: `class Team:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass Folder:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass File:\n    def __init__(self, uuid, user_ids):\n        self.uuid=uuid; self.user_ids=user_ids\nteams=[Team("T1",["F1"],[],[])]\nfolders=[Folder("F1",[],["file1"],["A"])]\nfiles=[File("file1",["A"])]\nps=PermissionSystem()\nps.init(teams,folders,files)\n_result=ps.get_fewest("B")`,
+            expectedOutput: `[]`,
+            orderIndex: 1,
+          },
+          {
+            description: "user with team-level access gets just the team",
+            inputData: `class Team:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass Folder:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass File:\n    def __init__(self, uuid, user_ids):\n        self.uuid=uuid; self.user_ids=user_ids\nteams=[Team("T1",["F1"],[],["A"])]\nfolders=[Folder("F1",[],["file1"],["A"])]\nfiles=[File("file1",["A"])]\nps=PermissionSystem()\nps.init(teams,folders,files)\n_result=ps.get_fewest("A")`,
+            expectedOutput: `["T1"]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 2,
+        title: "Move File and Re-Query",
+        description: `## Stage 2: Move File and Re-Query\n\nAdd \`move_file(file_id, new_parent_id)\` — move a file from its current parent to a new parent folder (or team). After the move, \`get_fewest\` must reflect the updated hierarchy.\n\n**Constraints:**\n- \`new_parent_id\` is always a valid Folder or Team uuid.\n- A file can only be moved to a direct parent (not nested inside itself).\n- The file's own \`user_ids\` do not change; only its position in the tree changes.\n\n\`\`\`python\n# Before move: F1 -> [file1(A)], F2 -> []\n# get_fewest("A") -> ["file1"]\n# move_file("file1", "F2")\n# Now: F1 -> [], F2 -> [file1(A)]\n# get_fewest("A") -> ["file1"]  (same result, different parent)\n\`\`\``,
+        baseClass: `from abc import ABC, abstractmethod\n\nclass PermissionSystemBase(ABC):\n    @abstractmethod\n    def init(self, teams: list, folders: list, files: list) -> None: ...\n\n    @abstractmethod\n    def get_fewest(self, user_id: str) -> list[str]: ...\n\n    @abstractmethod\n    def move_file(self, file_id: str, new_parent_id: str) -> None:\n        \"\"\"Move file_id to new_parent_id. Update hierarchy in place.\"\"\"\n        ...\n`,
+        starterCode: `class PermissionSystem(PermissionSystemBase):\n    def init(self, teams: list, folders: list, files: list) -> None:\n        # Copy your Stage 1 init here.\n        pass\n\n    def get_fewest(self, user_id: str) -> list[str]:\n        # Copy your Stage 1 get_fewest here.\n        pass\n\n    def move_file(self, file_id: str, new_parent_id: str) -> None:\n        # TODO: implement\n        pass\n`,
+        solution: `class PermissionSystem(PermissionSystemBase):\n    def init(self, teams: list, folders: list, files: list) -> None:\n        self._nodes = {}\n        self._parent = {}\n        for f in files:\n            self._nodes[f.uuid] = {"type": "file", "user_ids": set(f.user_ids), "children": []}\n            self._parent[f.uuid] = None\n        for folder in folders:\n            children = list(folder.folder_ids) + list(folder.file_ids)\n            self._nodes[folder.uuid] = {"type": "folder", "user_ids": set(folder.user_ids), "children": children}\n            self._parent[folder.uuid] = None\n            for child in children:\n                self._parent[child] = folder.uuid\n        for team in teams:\n            children = list(team.folder_ids) + list(team.file_ids)\n            self._nodes[team.uuid] = {"type": "team", "user_ids": set(team.user_ids), "children": children}\n            self._parent[team.uuid] = None\n            for child in children:\n                self._parent[child] = team.uuid\n        self._roots = [uid for uid, p in self._parent.items() if p is None and self._nodes[uid]["type"] == "team"]\n\n    def get_fewest(self, user_id: str) -> list[str]:\n        result = []\n        def dfs(node_id: str, ancestor_has_access: bool) -> None:\n            node = self._nodes[node_id]\n            has_direct = user_id in node["user_ids"]\n            if ancestor_has_access:\n                return\n            if has_direct:\n                result.append(node_id)\n                return\n            for child in node["children"]:\n                if child in self._nodes:\n                    dfs(child, False)\n        for root in self._roots:\n            dfs(root, False)\n        return sorted(result)\n\n    def move_file(self, file_id: str, new_parent_id: str) -> None:\n        # Remove from old parent's children list.\n        old_parent = self._parent.get(file_id)\n        if old_parent and old_parent in self._nodes:\n            self._nodes[old_parent]["children"] = [\n                c for c in self._nodes[old_parent]["children"] if c != file_id\n            ]\n        # Add to new parent's children list.\n        self._nodes[new_parent_id]["children"].append(file_id)\n        self._parent[file_id] = new_parent_id\n`,
+        solutionExplanation: "move_file: remove file_id from old parent's children list, append to new parent's children list, update _parent map. get_fewest is unchanged — it just traverses the updated tree.",
+        testCases: [
+          {
+            description: "moving file to a folder with no access still returns the file",
+            inputData: `class Team:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass Folder:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass File:\n    def __init__(self, uuid, user_ids):\n        self.uuid=uuid; self.user_ids=user_ids\nteams=[Team("T1",["F1","F2"],[],[])]\nfolders=[Folder("F1",[],["file1"],[]),Folder("F2",[],[],[])]\nfiles=[File("file1",["A"])]\nps=PermissionSystem()\nps.init(teams,folders,files)\nps.move_file("file1","F2")\n_result=ps.get_fewest("A")`,
+            expectedOutput: `["file1"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "moving file under a folder the user owns makes file redundant",
+            inputData: `class Team:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass Folder:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass File:\n    def __init__(self, uuid, user_ids):\n        self.uuid=uuid; self.user_ids=user_ids\nteams=[Team("T1",["F1","F2"],[],[])]\nfolders=[Folder("F1",[],[],["A"]),Folder("F2",[],["file1"],[])]\nfiles=[File("file1",["A"])]\nps=PermissionSystem()\nps.init(teams,folders,files)\nps.move_file("file1","F1")\n_result=ps.get_fewest("A")`,
+            expectedOutput: `["F1"]`,
+            orderIndex: 1,
+          },
+          {
+            description: "move does not affect other users",
+            inputData: `class Team:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass Folder:\n    def __init__(self, uuid, folder_ids, file_ids, user_ids):\n        self.uuid=uuid; self.folder_ids=folder_ids; self.file_ids=file_ids; self.user_ids=user_ids\nclass File:\n    def __init__(self, uuid, user_ids):\n        self.uuid=uuid; self.user_ids=user_ids\nteams=[Team("T1",["F1","F2"],[],[])]\nfolders=[Folder("F1",[],["file1"],[]),Folder("F2",[],["file2"],["B"])]\nfiles=[File("file1",["A"]),File("file2",["A","B"])]\nps=PermissionSystem()\nps.init(teams,folders,files)\nps.move_file("file1","F2")\n_result=ps.get_fewest("B")`,
+            expectedOutput: `["F2"]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+    ]
+  );
+
+  // ── 17. Flatten Nested Structure ───────────────────────────────────────────
+  await seedStagedProblemIfNotExists(
+    {
+      number: 17001,
+      slug: "flatten-nested-structure",
+      title: "Flatten Nested Structure",
+      difficulty: "Easy",
+      description: `## Flatten Nested Structure\n\nFigma's layer tree is deeply nested — frames contain groups, groups contain shapes, shapes contain sub-shapes. A common interview warm-up asks you to flatten these nested structures.\n\n**Stages:**\n1. Flatten a nested list of integers into a single flat list.\n2. Flatten a nested dict into a flat dict with dot-notation keys.\n3. Add a \`max_depth\` parameter to both — stop flattening beyond that depth.\n\nThis problem tests recursion, dict manipulation, and clean API design.`,
+      starterCode: `class Flattener:\n    def flatten_list(self, nested: list) -> list:\n        pass\n\n    def flatten_dict(self, nested: dict, prefix: str = "") -> dict:\n        pass\n`,
+      tags: "figma,recursion,tree,simulation",
+      badges: "figma",
+    },
+    [
+      {
+        stageNumber: 1,
+        title: "Flatten Nested List",
+        description: `## Stage 1: Flatten Nested List\n\nImplement \`flatten_list(nested)\` — recursively flatten a list that may contain integers or other lists (arbitrarily deep) into a single flat list of integers.\n\n\`\`\`python\nf = Flattener()\nprint(f.flatten_list([1, [2, [3, 4], 5]]))  # [1, 2, 3, 4, 5]\nprint(f.flatten_list([]))                    # []\nprint(f.flatten_list([1, 2, 3]))             # [1, 2, 3]\n\`\`\``,
+        baseClass: `from abc import ABC, abstractmethod\n\nclass FlattenerBase(ABC):\n    @abstractmethod\n    def flatten_list(self, nested: list) -> list:\n        \"\"\"Recursively flatten a nested list of integers.\"\"\"\n        ...\n`,
+        starterCode: `class Flattener(FlattenerBase):\n    def flatten_list(self, nested: list) -> list:\n        # TODO: implement\n        pass\n`,
+        solution: `class Flattener(FlattenerBase):\n    def flatten_list(self, nested: list) -> list:\n        result = []\n        for item in nested:\n            if isinstance(item, list):\n                # Recurse into sub-lists.\n                result.extend(self.flatten_list(item))\n            else:\n                # Base case: plain value.\n                result.append(item)\n        return result\n`,
+        solutionExplanation: "Iterate over items; if an item is a list, recurse and extend; otherwise append. This is a clean recursive DFS over the nested structure.",
+        testCases: [
+          {
+            description: "deeply nested list flattens correctly",
+            inputData: `f = Flattener()\n_result = f.flatten_list([1, [2, [3, 4], 5]])`,
+            expectedOutput: `[1, 2, 3, 4, 5]`,
+            orderIndex: 0,
+          },
+          {
+            description: "empty list returns empty list",
+            inputData: `f = Flattener()\n_result = f.flatten_list([])`,
+            expectedOutput: `[]`,
+            orderIndex: 1,
+          },
+          {
+            description: "already flat list is returned unchanged",
+            inputData: `f = Flattener()\n_result = f.flatten_list([1, 2, 3])`,
+            expectedOutput: `[1, 2, 3]`,
+            orderIndex: 2,
+          },
+          {
+            description: "triple-nested list",
+            inputData: `f = Flattener()\n_result = f.flatten_list([[[[1]], 2], [3, [4, [5]]]])`,
+            expectedOutput: `[1, 2, 3, 4, 5]`,
+            orderIndex: 3,
+          },
+        ],
+      },
+      {
+        stageNumber: 2,
+        title: "Flatten Nested Dict",
+        description: `## Stage 2: Flatten Nested Dict\n\nAdd \`flatten_dict(nested, prefix="")\` — flatten a nested dict into a flat dict where nested keys are joined with dots.\n\n\`\`\`python\nf = Flattener()\nprint(f.flatten_dict({"a": {"b": 1, "c": {"d": 2}}}))  # {"a.b": 1, "a.c.d": 2}\nprint(f.flatten_dict({"x": 1, "y": 2}))                 # {"x": 1, "y": 2}\nprint(f.flatten_dict({}))                                # {}\n\`\`\``,
+        baseClass: `from abc import ABC, abstractmethod\n\nclass FlattenerBase(ABC):\n    @abstractmethod\n    def flatten_list(self, nested: list) -> list: ...\n\n    @abstractmethod\n    def flatten_dict(self, nested: dict, prefix: str = "") -> dict:\n        \"\"\"Flatten nested dict using dot-notation keys.\"\"\"\n        ...\n`,
+        starterCode: `class Flattener(FlattenerBase):\n    def flatten_list(self, nested: list) -> list:\n        # Copy your Stage 1 solution here.\n        pass\n\n    def flatten_dict(self, nested: dict, prefix: str = "") -> dict:\n        # TODO: implement\n        pass\n`,
+        solution: `class Flattener(FlattenerBase):\n    def flatten_list(self, nested: list) -> list:\n        result = []\n        for item in nested:\n            if isinstance(item, list):\n                result.extend(self.flatten_list(item))\n            else:\n                result.append(item)\n        return result\n\n    def flatten_dict(self, nested: dict, prefix: str = "") -> dict:\n        result = {}\n        for key, value in nested.items():\n            # Build the full dot-notation key.\n            full_key = f"{prefix}.{key}" if prefix else key\n            if isinstance(value, dict):\n                # Recurse and merge into result.\n                result.update(self.flatten_dict(value, full_key))\n            else:\n                # Leaf value: store directly.\n                result[full_key] = value\n        return result\n`,
+        solutionExplanation: "Recurse over key-value pairs. If the value is a dict, recurse with the accumulated prefix. Otherwise store prefix.key -> value. The prefix is built by joining with dots.",
+        testCases: [
+          {
+            description: "nested dict with multiple levels flattens to dot-notation",
+            inputData: `f = Flattener()\n_result = f.flatten_dict({"a": {"b": 1, "c": {"d": 2}}})`,
+            expectedOutput: `{"a.b": 1, "a.c.d": 2}`,
+            orderIndex: 0,
+          },
+          {
+            description: "already flat dict is returned unchanged",
+            inputData: `f = Flattener()\n_result = f.flatten_dict({"x": 1, "y": 2})`,
+            expectedOutput: `{"x": 1, "y": 2}`,
+            orderIndex: 1,
+          },
+          {
+            description: "empty dict returns empty dict",
+            inputData: `f = Flattener()\n_result = f.flatten_dict({})`,
+            expectedOutput: `{}`,
+            orderIndex: 2,
+          },
+          {
+            description: "mixed flat and nested keys",
+            inputData: `f = Flattener()\n_result = f.flatten_dict({"a": 1, "b": {"c": 2, "d": {"e": 3}}})`,
+            expectedOutput: `{"a": 1, "b.c": 2, "b.d.e": 3}`,
+            orderIndex: 3,
+          },
+        ],
+      },
+      {
+        stageNumber: 3,
+        title: "Flatten with Depth Limit",
+        description: `## Stage 3: Flatten with Depth Limit\n\nAdd a \`max_depth\` parameter to both \`flatten_list\` and \`flatten_dict\`. Stop flattening at that depth — sub-structures beyond \`max_depth\` are kept as-is.\n\n- \`max_depth=0\` means no flattening at all (return the input unchanged).\n- \`max_depth=1\` flattens only the top level.\n\n\`\`\`python\nf = Flattener()\nprint(f.flatten_list([1, [2, [3, 4]]], max_depth=1))  # [1, 2, [3, 4]]\nprint(f.flatten_dict({"a": {"b": {"c": 1}}}, max_depth=1))  # {"a.b": {"c": 1}}\n\`\`\``,
+        baseClass: `from abc import ABC, abstractmethod\n\nclass FlattenerBase(ABC):\n    @abstractmethod\n    def flatten_list(self, nested: list, max_depth: int = -1) -> list:\n        \"\"\"Flatten nested list up to max_depth levels (-1 = unlimited).\"\"\"\n        ...\n\n    @abstractmethod\n    def flatten_dict(self, nested: dict, prefix: str = "", max_depth: int = -1) -> dict:\n        \"\"\"Flatten nested dict up to max_depth levels (-1 = unlimited).\"\"\"\n        ...\n`,
+        starterCode: `class Flattener(FlattenerBase):\n    def flatten_list(self, nested: list, max_depth: int = -1) -> list:\n        # Copy your Stage 2 solution and add max_depth support.\n        pass\n\n    def flatten_dict(self, nested: dict, prefix: str = "", max_depth: int = -1) -> dict:\n        # Copy your Stage 2 solution and add max_depth support.\n        pass\n`,
+        solution: `class Flattener(FlattenerBase):\n    def flatten_list(self, nested: list, max_depth: int = -1) -> list:\n        # max_depth == 0: no flattening; return as-is.\n        if max_depth == 0:\n            return list(nested)\n        result = []\n        for item in nested:\n            if isinstance(item, list):\n                # Recurse with depth decremented (or keep -1 for unlimited).\n                next_depth = max_depth - 1 if max_depth > 0 else -1\n                result.extend(self.flatten_list(item, next_depth))\n            else:\n                result.append(item)\n        return result\n\n    def flatten_dict(self, nested: dict, prefix: str = "", max_depth: int = -1) -> dict:\n        result = {}\n        for key, value in nested.items():\n            full_key = f"{prefix}.{key}" if prefix else key\n            # Only recurse into dicts if we still have depth budget.\n            if isinstance(value, dict) and max_depth != 0:\n                next_depth = max_depth - 1 if max_depth > 0 else -1\n                result.update(self.flatten_dict(value, full_key, next_depth))\n            else:\n                # Either a leaf value, or max_depth==0 so keep as-is.\n                result[full_key] = value\n        return result\n`,
+        solutionExplanation: "Pass max_depth through recursion. At each level, if max_depth==0 stop recursing. Otherwise decrement by 1 (or keep -1 for unlimited). This gives precise depth control.",
+        testCases: [
+          {
+            description: "flatten_list with max_depth=1 stops at first level",
+            inputData: `f = Flattener()\n_result = f.flatten_list([1, [2, [3, 4]]], max_depth=1)`,
+            expectedOutput: `[1, 2, [3, 4]]`,
+            orderIndex: 0,
+          },
+          {
+            description: "flatten_list with max_depth=0 returns unchanged",
+            inputData: `f = Flattener()\n_result = f.flatten_list([1, [2, [3, 4]]], max_depth=0)`,
+            expectedOutput: `[1, [2, [3, 4]]]`,
+            orderIndex: 1,
+          },
+          {
+            description: "flatten_dict with max_depth=1 keeps inner dicts as values",
+            inputData: `f = Flattener()\n_result = f.flatten_dict({"a": {"b": {"c": 1}}}, max_depth=1)`,
+            expectedOutput: `{"a.b": {"c": 1}}`,
+            orderIndex: 2,
+          },
+          {
+            description: "flatten_list unlimited (default) still works",
+            inputData: `f = Flattener()\n_result = f.flatten_list([1, [2, [3, [4, [5]]]]])`,
+            expectedOutput: `[1, 2, 3, 4, 5]`,
+            orderIndex: 3,
+          },
+        ],
+      },
+    ]
+  );
+
   console.log("[Seed] Figma problems seeded.");
 }
 

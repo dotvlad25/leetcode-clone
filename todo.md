@@ -139,3 +139,13 @@
 - [x] Seed 2D Canvas Ordering (2 stages, figma badge)
 - [x] Seed Component Tree Traversal (3 stages, figma badge)
 - [x] Verify all 98 reference solution test cases pass (12 problems, all stages)
+
+## Missing Figma Problems (NEW)
+- [x] Seed Resize Stacked Rectangles (2 stages, figma badge) — integer algorithm, 7 tests pass
+- [x] Seed File / Folder / Team Permissions — Fewest Grants (2 stages, figma badge) — 6 tests pass
+- [x] Seed Flatten Nested Structure (3 stages, figma badge) — 12 tests pass
+- [x] Fix Resize Stage 1 solution: use integer floor division + sort-by-height algorithm
+- [x] Fix flatten_dict Stage 3 solution: correct max_depth=0 handling (iterate keys, not return {prefix: nested})
+- [x] Re-seed Resize and Flatten problems with corrected solutions and test expected outputs
+- [x] Verify all 25 new reference solution tests pass (3 problems, 7 stages)
+- [x] All 11 vitest tests still pass after changes
