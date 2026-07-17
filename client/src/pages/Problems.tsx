@@ -7,6 +7,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle2, Circle, Layers } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 
+const BADGE_STYLES: Record<string, { label: string; cls: string }> = {
+  anth: { label: "Anthropic", cls: "border-orange-500/40 text-orange-400 bg-orange-500/10" },
+  figma: { label: "Figma", cls: "border-purple-500/40 text-purple-400 bg-purple-500/10" },
+};
+
+function CompanyBadges({ badges }: { badges?: string | null }) {
+  if (!badges) return null;
+  const list = badges.split(",").map(b => b.trim()).filter(Boolean);
+  return (
+    <>
+      {list.map(b => {
+        const style = BADGE_STYLES[b] ?? { label: b, cls: "border-muted text-muted-foreground bg-muted/20" };
+        return (
+          <span key={b} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${style.cls} leading-none`}>
+            {style.label}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const cls =
     difficulty === "Easy" ? "badge-easy" :
@@ -70,11 +92,12 @@ export default function Problems() {
                      <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                        {p.title}
                      </span>
-                     {p.isStaged ? (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-blue-500/40 text-blue-400 bg-blue-500/10 leading-none">
-                        STAGED
-                      </span>
-                    ) : null}
+                    {p.isStaged ? (
+                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-blue-500/40 text-blue-400 bg-blue-500/10 leading-none">
+                       STAGED
+                     </span>
+                   ) : null}
+                    <CompanyBadges badges={p.badges} />
                    </div>
                     <div className="flex items-center">
                       <DifficultyBadge difficulty={p.difficulty} />

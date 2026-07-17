@@ -1919,6 +1919,7 @@ export async function runStagedSeed() {
       title: "Rate Limiter",
       difficulty: "Medium",
       tags: "design,sliding-window,threading",
+      badges: "anth",
       description: `## Rate Limiter\n\n**Difficulty:** Medium | **Type:** Systems / Design\n\nImplement a per-user rate limiter that allows at most **N requests per T seconds** per user.\n\n### Stage 1: Sliding Window Log\n\nImplement \`allow_request(user_id)\` using a sliding window. At most \`max_requests\` calls per \`window_seconds\` per user.\n\n**Key insight:** Use a \`deque\` of timestamps per user. On each call, prune expired timestamps, then check count.\n\n### Stage 2: Memory Cleanup\n\nAdd \`cleanup()\` that removes users with no recent requests and returns the count removed.\n\n### Stage 3: Thread Safety\n\nAdd \`allow_request_thread_safe(user_id)\` that uses per-user locking to prevent race conditions.\n\n**Follow-up discussion:** Distributed rate limiting with Redis + Lua scripts for atomic sliding window.`,
       starterCode: RATE_LIMITER_STARTER_S1,
     },
@@ -2009,6 +2010,7 @@ export async function runStagedSeed() {
       title: "Duplicate File Finder",
       difficulty: "Medium",
       tags: "hashing,optimization,filesystem",
+      badges: "anth",
       description: `## Duplicate File Finder\n\n**Difficulty:** Medium | **Type:** Systems / Optimization\n\nFind all groups of files with identical content in a directory tree.\n\n### Stage 1: Hash-Based Finder\n\nWalk the directory tree, compute MD5 hash of each file, group by hash.\n\n### Stage 2: 3-Pass Optimized\n\nFor multi-GB files, reading everything is wasteful. Implement a 3-pass approach:\n- **Pass 1:** Group by file size (zero I/O — just stat())\n- **Pass 2:** Partial hash (first + middle + last 4KB)\n- **Pass 3:** Full hash only for remaining candidates\n\n**I/O savings:** 1000 files × 2GB = 2TB naive. With 3-pass: ~20GB (100x reduction).`,
       starterCode: DUP_STARTER_S1,
     },
@@ -2076,6 +2078,7 @@ export async function runStagedSeed() {
       title: "Stack Trace Profiler",
       difficulty: "Hard",
       tags: "stack,diffing,profiling",
+      badges: "anth",
       description: `## Stack Trace Profiler\n\n**Difficulty:** Hard | **Type:** Algorithms / Diffing\n\nA sampling profiler takes periodic snapshots of the call stack. Convert these snapshots into start/end trace events.\n\n### TraceEvent fields\n\n- \`timestamp\` — the snapshot index (0-based) at which the event occurs\n- \`function\` — the name of the function\n- \`depth\` — the 0-based position in the stack (0 = outermost/bottom frame, higher = deeper/inner)\n- \`event_type\` — \`"start"\` when the function enters, \`"end"\` when it exits\n\n### Stage 1: Basic Trace Events\n\nConvert stack snapshots to trace events. Track by **position (depth)**, not name — this handles recursion correctly.\n\n### Stage 2: Denoising Filter\n\nAdd \`convert_with_denoising(snapshots, min_samples=3)\` that filters out functions appearing for fewer than N consecutive samples.\n\n**Key insight:** Track by POSITION, not NAME. This is the core insight that separates pass from fail on recursive inputs.`,
       starterCode: PROFILER_STARTER_S1,
     },
@@ -2149,6 +2152,7 @@ export async function runStagedSeed() {
       title: "Greedy Tokenizer",
       difficulty: "Medium",
       tags: "trie,strings,nlp",
+      badges: "anth",
       description: `## Greedy Tokenizer\n\n**Difficulty:** Medium | **Type:** Algorithms / Strings\n\nImplement greedy longest-match tokenization — the inference step of BPE/WordPiece tokenizers.\n\n### Stage 1: Set Lookup\n\nAt each position, try lengths from max_len down to 1. Take the longest match. If nothing matches, emit the single character.\n\n### Stage 2: Trie Optimization\n\nFor 100K+ vocab entries, set lookup creates O(n × M) substrings. A Trie avoids substring creation and terminates early. O(n × L) where L = actual match length.`,
       starterCode: TOKENIZER_STARTER_S1,
     },
@@ -2216,6 +2220,7 @@ export async function runStagedSeed() {
       title: "Count Smaller to the Right",
       difficulty: "Hard",
       tags: "sorting,fenwick-tree,bisect",
+      badges: "anth",
       description: `## Count Smaller to the Right\n\n**Difficulty:** Hard | **Type:** Algorithms / Classic\n\nFor each element in an array, count how many elements to its right are strictly smaller.\n\n\`\`\`\n[5, 2, 6, 1] → [2, 1, 1, 0]\n5: two smaller to right (2, 1)\n2: one smaller (1)\n6: one smaller (1)\n1: zero\n\`\`\`\n\n### Stage 1: Brute Force O(n²)\n\nFor each i, count j > i where nums[j] < nums[i].\n\n### Stage 2: O(n log n) with Bisect\n\nProcess right to left, maintaining a sorted list. Use \`bisect_left\` to count elements smaller than current.`,
       starterCode: SMALLER_STARTER_S1,
     },
@@ -2295,6 +2300,7 @@ export async function runStagedSeed() {
       title: "In-Memory Database",
       difficulty: "Medium",
       tags: "design,dict,transactions",
+      badges: "anth",
       description: `## In-Memory Database\n\n**Difficulty:** Medium | **Type:** Systems / Progressive\n\nBuild a progressive in-memory key-value database. Each stage adds new capabilities.\n\n### Stage 1: Basic CRUD\nSET, GET, DELETE, COUNT.\n\n### Stage 2: Modification Tracking\nHISTORY (all timestamps for a key), MODIFIED_SINCE.\n\n### Stage 3: Record Locking\nLOCK/UNLOCK — SET/DELETE require the caller to hold the lock.\n\n### Stage 4: Transactions\nBEGIN/COMMIT/ROLLBACK — undo log pattern.\n\n**Key insight:** Don't refactor between levels. Each level should be ~10 lines added to the existing class.`,
       starterCode: DB_STARTER_S1,
     },
@@ -2420,6 +2426,7 @@ export async function runStagedSeed() {
       title: "Bank System",
       difficulty: "Medium",
       tags: "design,union-find,dict",
+      badges: "anth",
       description: `## Bank System\n\n**Difficulty:** Medium | **Type:** Systems / Progressive\n\nBuild a progressive banking system. Each stage adds new capabilities.\n\n### Stage 1: Basic Accounts\nCREATE, DEPOSIT, WITHDRAW, BALANCE.\n\n### Stage 2: Transfers\nATOMIC transfer between accounts.\n\n### Stage 3: Account Merging\nMERGE — union-find pattern with path compression.\n\n### Stage 4: Cashback / Rewards\nTOP_SPENDERS, CASHBACK.`,
       starterCode: BANK_STARTER_S1,
     },
@@ -2551,6 +2558,7 @@ export async function runStagedSeed() {
       title: "LRU Cache + Task Manager",
       difficulty: "Medium",
       tags: "lru,heap,design",
+      badges: "anth",
       description: `## LRU Cache + Task Manager\n\n**Difficulty:** Medium | **Type:** Systems / Design\n\nProgressive from basic LRU cache to production task manager.\n\n### Stage 1: LRU Cache\nO(1) get and put with LRU eviction.\n\n### Stage 2: TTL Support\nEntries expire after a specified duration.\n\n### Stage 3: Task Manager\nPriority queue with lazy deletion.\n\n**Key tools:** \`OrderedDict\` for LRU. \`heapq\` for task manager with lazy deletion.`,
       starterCode: LRU_STARTER_S1,
     },
@@ -2647,6 +2655,1361 @@ export async function runStagedSeed() {
 
   // ── Post-seed: ensure testFileContent is populated for all staged stages ────
   await backfillTestFileContent();
+  // ── Figma problems ──────────────────────────────────────────────────────────
+  await seedFigmaProblems();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 11. LAYER / DOCUMENT SYSTEM  (Figma — most reported coding question)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const LAYER_BASE_S1 = `\
+from abc import ABC, abstractmethod
+
+class LayerDocumentBase(ABC):
+    @abstractmethod
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        """Set property 'prop' on layer 'layer_id' to 'value'."""
+        pass
+
+    @abstractmethod
+    def layer(self, layer_id: str) -> dict:
+        """Return a dict of all properties for 'layer_id'. Empty dict if unknown."""
+        pass
+`;
+
+const LAYER_STARTER_S1 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        pass  # TODO: initialise your data structures
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        pass  # TODO
+
+    def layer(self, layer_id: str) -> dict:
+        pass  # TODO
+`;
+
+const LAYER_SOL_S1 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        # Map from layer_id -> {prop -> value}
+        # Using a plain dict gives O(1) apply and O(1) layer lookup.
+        self._layers: dict[str, dict] = {}
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        # Create the layer's property dict on first use (lazy init).
+        if layer_id not in self._layers:
+            self._layers[layer_id] = {}
+        self._layers[layer_id][prop] = value
+
+    def layer(self, layer_id: str) -> dict:
+        # Return a shallow copy so callers can't accidentally mutate
+        # internal state by modifying the returned dict.
+        return dict(self._layers.get(layer_id, {}))
+`;
+
+const LAYER_BASE_S2 = `\
+from abc import ABC, abstractmethod
+
+class LayerDocumentBase(ABC):
+    @abstractmethod
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        pass
+
+    @abstractmethod
+    def layer(self, layer_id: str) -> dict:
+        pass
+
+    @abstractmethod
+    def undo(self) -> bool:
+        """Undo the last apply(). Returns False if nothing to undo."""
+        pass
+`;
+
+const LAYER_STARTER_S2 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        pass  # TODO: add undo history data structure
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        pass  # TODO: record old value before overwriting
+
+    def layer(self, layer_id: str) -> dict:
+        pass  # TODO
+
+    def undo(self) -> bool:
+        pass  # TODO: pop last operation and reverse it
+`;
+
+const LAYER_SOL_S2 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        self._layers: dict[str, dict] = {}
+        # Each history entry: (layer_id, prop, old_value_or_None, new_value)
+        # old_value is None when the property didn't exist before this apply().
+        self._history: list[tuple] = []
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        if layer_id not in self._layers:
+            self._layers[layer_id] = {}
+        # Snapshot the old value BEFORE overwriting — this is what undo restores.
+        old = self._layers[layer_id].get(prop, None)
+        self._history.append((layer_id, prop, old, value))
+        self._layers[layer_id][prop] = value
+
+    def layer(self, layer_id: str) -> dict:
+        return dict(self._layers.get(layer_id, {}))
+
+    def undo(self) -> bool:
+        if not self._history:
+            return False  # nothing to undo
+        layer_id, prop, old, _ = self._history.pop()
+        if old is None:
+            # The property was created by this apply() — remove it entirely.
+            del self._layers[layer_id][prop]
+        else:
+            # Restore the previous value.
+            self._layers[layer_id][prop] = old
+        return True
+`;
+
+const LAYER_BASE_S3 = `\
+from abc import ABC, abstractmethod
+
+class LayerDocumentBase(ABC):
+    @abstractmethod
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        pass
+
+    @abstractmethod
+    def layer(self, layer_id: str) -> dict:
+        pass
+
+    @abstractmethod
+    def undo(self) -> bool:
+        pass
+
+    @abstractmethod
+    def redo(self) -> bool:
+        """Re-apply the last undone operation. Returns False if nothing to redo."""
+        pass
+`;
+
+const LAYER_STARTER_S3 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        pass  # TODO: two stacks — undo and redo
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        pass  # TODO: clear redo stack on any new apply
+
+    def layer(self, layer_id: str) -> dict:
+        pass
+
+    def undo(self) -> bool:
+        pass  # TODO: move entry from undo stack to redo stack
+
+    def redo(self) -> bool:
+        pass  # TODO: move entry from redo stack back to undo stack
+`;
+
+const LAYER_SOL_S3 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        self._layers: dict[str, dict] = {}
+        # Two-stack undo/redo pattern — the same model used by every text editor.
+        # undo_stack: operations that can be undone (most recent on top).
+        # redo_stack: operations that were undone and can be re-applied.
+        self._undo_stack: list[tuple] = []
+        self._redo_stack: list[tuple] = []
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        if layer_id not in self._layers:
+            self._layers[layer_id] = {}
+        old = self._layers[layer_id].get(prop, None)
+        self._undo_stack.append((layer_id, prop, old, value))
+        # KEY RULE: any new edit clears the redo stack.
+        # This mirrors real editors — you can't redo after making a new change.
+        self._redo_stack.clear()
+        self._layers[layer_id][prop] = value
+
+    def layer(self, layer_id: str) -> dict:
+        return dict(self._layers.get(layer_id, {}))
+
+    def undo(self) -> bool:
+        if not self._undo_stack:
+            return False
+        entry = self._undo_stack.pop()
+        # Move to redo stack so it can be re-applied later.
+        self._redo_stack.append(entry)
+        layer_id, prop, old, _ = entry
+        if old is None:
+            del self._layers[layer_id][prop]
+        else:
+            self._layers[layer_id][prop] = old
+        return True
+
+    def redo(self) -> bool:
+        if not self._redo_stack:
+            return False
+        entry = self._redo_stack.pop()
+        # Move back to undo stack so it can be undone again.
+        self._undo_stack.append(entry)
+        layer_id, prop, old, new_val = entry
+        self._layers[layer_id][prop] = new_val
+        return True
+`;
+
+const LAYER_BASE_S4 = `\
+from abc import ABC, abstractmethod
+
+class LayerDocumentBase(ABC):
+    @abstractmethod
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        pass
+
+    @abstractmethod
+    def layer(self, layer_id: str) -> dict:
+        pass
+
+    @abstractmethod
+    def undo(self) -> bool:
+        pass
+
+    @abstractmethod
+    def redo(self) -> bool:
+        pass
+
+    @abstractmethod
+    def begin_batch(self) -> None:
+        """Start collecting operations into a batch."""
+        pass
+
+    @abstractmethod
+    def commit_batch(self) -> None:
+        """Commit the batch as a single undoable unit."""
+        pass
+`;
+
+const LAYER_STARTER_S4 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        pass  # TODO: add batch buffer alongside undo/redo stacks
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        pass  # TODO: if inside a batch, buffer; else push to undo stack
+
+    def layer(self, layer_id: str) -> dict:
+        pass
+
+    def undo(self) -> bool:
+        pass  # TODO: pop a group (list of ops) and reverse all of them
+
+    def redo(self) -> bool:
+        pass  # TODO: pop a group from redo stack and re-apply all
+
+    def begin_batch(self) -> None:
+        pass  # TODO: initialise the batch buffer
+
+    def commit_batch(self) -> None:
+        pass  # TODO: push the buffer as one group onto the undo stack
+`;
+
+const LAYER_SOL_S4 = `\
+class LayerDocument(LayerDocumentBase):
+    def __init__(self):
+        self._layers: dict[str, dict] = {}
+        # Each entry on the undo/redo stacks is now a LIST of ops (a group).
+        # A single apply() outside a batch creates a one-element group.
+        # begin_batch/commit_batch creates a multi-element group.
+        self._undo_stack: list[list[tuple]] = []
+        self._redo_stack: list[list[tuple]] = []
+        # _batch is None when not in a batch; a list when collecting ops.
+        self._batch: list[tuple] | None = None
+
+    def apply(self, layer_id: str, prop: str, value) -> None:
+        if layer_id not in self._layers:
+            self._layers[layer_id] = {}
+        old = self._layers[layer_id].get(prop, None)
+        op = (layer_id, prop, old, value)
+        if self._batch is not None:
+            # Inside a batch — collect the op without touching the undo stack.
+            self._batch.append(op)
+        else:
+            # Outside a batch — wrap in a single-element group immediately.
+            self._undo_stack.append([op])
+            self._redo_stack.clear()  # new edit clears redo
+        self._layers[layer_id][prop] = value
+
+    def begin_batch(self) -> None:
+        # Start a new batch buffer. Nested batches are not supported.
+        self._batch = []
+
+    def commit_batch(self) -> None:
+        # Push the collected ops as one atomic group onto the undo stack.
+        if self._batch:
+            self._undo_stack.append(self._batch)
+            self._redo_stack.clear()
+        self._batch = None  # reset regardless of whether batch was empty
+
+    def layer(self, layer_id: str) -> dict:
+        return dict(self._layers.get(layer_id, {}))
+
+    def _reverse_group(self, group: list[tuple]) -> None:
+        # Undo a group by reversing each op in reverse order
+        # (last op first, so the state unwinds correctly).
+        for layer_id, prop, old, _ in reversed(group):
+            if old is None:
+                del self._layers[layer_id][prop]
+            else:
+                self._layers[layer_id][prop] = old
+
+    def _apply_group(self, group: list[tuple]) -> None:
+        # Re-apply a group in forward order.
+        for layer_id, prop, _, new_val in group:
+            self._layers[layer_id][prop] = new_val
+
+    def undo(self) -> bool:
+        if not self._undo_stack:
+            return False
+        group = self._undo_stack.pop()
+        self._redo_stack.append(group)
+        self._reverse_group(group)
+        return True
+
+    def redo(self) -> bool:
+        if not self._redo_stack:
+            return False
+        group = self._redo_stack.pop()
+        self._undo_stack.append(group)
+        self._apply_group(group)
+        return True
+`;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 12. FILE SYSTEM WITH PERMISSIONS
+// ══════════════════════════════════════════════════════════════════════════════
+
+const FS_BASE_S1 = `\
+from abc import ABC, abstractmethod
+
+class FileSystemBase(ABC):
+    @abstractmethod
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        """Add a file or directory named 'name' under 'parent_path'.
+        node_type is 'file' or 'dir'. The root path is '/'."""
+        pass
+
+    @abstractmethod
+    def find(self, name: str) -> list:
+        """Return a sorted list of absolute paths where a node named 'name' exists."""
+        pass
+`;
+
+const FS_STARTER_S1 = `\
+class FileSystem(FileSystemBase):
+    def __init__(self):
+        pass  # TODO: initialise the tree rooted at '/'
+
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        pass  # TODO: attach a new node under parent_path
+
+    def find(self, name: str) -> list:
+        pass  # TODO: DFS to collect all paths matching 'name'
+`;
+
+const FS_SOL_S1 = `\
+class FileSystem(FileSystemBase):
+    def __init__(self):
+        # Each node is a dict: {name, type, children: list}
+        # We keep a flat index (path -> node) for O(1) parent lookup in add().
+        self._root = {"name": "/", "type": "dir", "children": []}
+        self._nodes: dict[str, dict] = {"/": self._root}
+
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        node = {"name": name, "type": node_type, "children": []}
+        # Build the absolute path for this new node.
+        path = parent_path.rstrip("/") + "/" + name
+        self._nodes[path] = node
+        self._nodes[parent_path]["children"].append(node)
+
+    def find(self, name: str) -> list:
+        results: list[str] = []
+        def dfs(node: dict, path: str) -> None:
+            # Skip the virtual root node itself.
+            if node["name"] == name and path != "/":
+                results.append(path)
+            for child in node["children"]:
+                child_path = path.rstrip("/") + "/" + child["name"]
+                dfs(child, child_path)
+        dfs(self._root, "/")
+        # Sort so the result is deterministic regardless of insertion order.
+        return sorted(results)
+`;
+
+const FS_BASE_S2 = `\
+from abc import ABC, abstractmethod
+
+class FileSystemBase(ABC):
+    @abstractmethod
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        pass
+
+    @abstractmethod
+    def find(self, name: str) -> list:
+        pass
+
+    @abstractmethod
+    def grant(self, path: str, user: str) -> None:
+        """Grant 'user' explicit access to the node at 'path'."""
+        pass
+
+    @abstractmethod
+    def accessible(self, user: str) -> list:
+        """Return sorted list of TOPMOST paths accessible to 'user'.
+        A path is topmost if no ancestor is also accessible to the same user."""
+        pass
+`;
+
+const FS_STARTER_S2 = `\
+class FileSystem(FileSystemBase):
+    def __init__(self):
+        pass  # TODO: store per-node user sets
+
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        pass
+
+    def find(self, name: str) -> list:
+        pass
+
+    def grant(self, path: str, user: str) -> None:
+        pass  # TODO: add user to node's access set
+
+    def accessible(self, user: str) -> list:
+        pass  # TODO: DFS — report topmost nodes where user has access
+`;
+
+const FS_SOL_S2 = `\
+class FileSystem(FileSystemBase):
+    def __init__(self):
+        self._root = {"name": "/", "type": "dir", "children": [], "users": set()}
+        self._nodes: dict[str, dict] = {"/": self._root}
+
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        node = {"name": name, "type": node_type, "children": [], "users": set()}
+        path = parent_path.rstrip("/") + "/" + name
+        self._nodes[path] = node
+        self._nodes[parent_path]["children"].append(node)
+
+    def find(self, name: str) -> list:
+        results: list[str] = []
+        def dfs(node: dict, path: str) -> None:
+            if node["name"] == name and path != "/":
+                results.append(path)
+            for child in node["children"]:
+                dfs(child, path.rstrip("/") + "/" + child["name"])
+        dfs(self._root, "/")
+        return sorted(results)
+
+    def grant(self, path: str, user: str) -> None:
+        self._nodes[path]["users"].add(user)
+
+    def accessible(self, user: str) -> list:
+        results: list[str] = []
+        def dfs(node: dict, path: str, ancestor_has_access: bool) -> None:
+            has_access = user in node["users"]
+            if has_access and not ancestor_has_access:
+                # This is the topmost node in this branch with access.
+                # We report it and continue DFS so children are NOT reported
+                # (they would be redundant — access is already granted above).
+                results.append(path)
+            for child in node["children"]:
+                child_path = path.rstrip("/") + "/" + child["name"]
+                # Pass True if this node or any ancestor had access.
+                dfs(child, child_path, ancestor_has_access or has_access)
+        for child in self._root["children"]:
+            dfs(child, "/" + child["name"], False)
+        return sorted(results)
+`;
+
+const FS_BASE_S3 = `\
+from abc import ABC, abstractmethod
+
+class FileSystemBase(ABC):
+    @abstractmethod
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        pass
+
+    @abstractmethod
+    def find(self, name: str) -> list:
+        pass
+
+    @abstractmethod
+    def grant(self, path: str, user: str) -> None:
+        pass
+
+    @abstractmethod
+    def revoke(self, path: str, user: str) -> None:
+        """Explicitly revoke 'user' access at 'path'.
+        An explicit revoke overrides any inherited grant from an ancestor."""
+        pass
+
+    @abstractmethod
+    def accessible(self, user: str) -> list:
+        pass
+`;
+
+const FS_STARTER_S3 = `\
+class FileSystem(FileSystemBase):
+    def __init__(self):
+        pass  # TODO: track both grants and explicit revokes per node
+
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        pass
+
+    def find(self, name: str) -> list:
+        pass
+
+    def grant(self, path: str, user: str) -> None:
+        pass
+
+    def revoke(self, path: str, user: str) -> None:
+        pass  # TODO: mark explicit revoke so DFS stops inheritance here
+
+    def accessible(self, user: str) -> list:
+        pass  # TODO: DFS with effective_access = (granted or inherited) and not revoked
+`;
+
+const FS_SOL_S3 = `\
+class FileSystem(FileSystemBase):
+    def __init__(self):
+        # Each node stores two sets: grants (explicit allow) and revokes (explicit deny).
+        # An explicit revoke at a node blocks inherited access from ancestors.
+        self._root = {"name": "/", "type": "dir", "children": [],
+                      "grants": set(), "revokes": set()}
+        self._nodes: dict[str, dict] = {"/": self._root}
+
+    def add(self, parent_path: str, name: str, node_type: str) -> None:
+        node = {"name": name, "type": node_type, "children": [],
+                "grants": set(), "revokes": set()}
+        path = parent_path.rstrip("/") + "/" + name
+        self._nodes[path] = node
+        self._nodes[parent_path]["children"].append(node)
+
+    def find(self, name: str) -> list:
+        results: list[str] = []
+        def dfs(node: dict, path: str) -> None:
+            if node["name"] == name and path != "/":
+                results.append(path)
+            for child in node["children"]:
+                dfs(child, path.rstrip("/") + "/" + child["name"])
+        dfs(self._root, "/")
+        return sorted(results)
+
+    def grant(self, path: str, user: str) -> None:
+        self._nodes[path]["grants"].add(user)
+        # Granting removes any prior explicit revoke at this node.
+        self._nodes[path]["revokes"].discard(user)
+
+    def revoke(self, path: str, user: str) -> None:
+        self._nodes[path]["revokes"].add(user)
+        # Revoking removes any prior explicit grant at this node.
+        self._nodes[path]["grants"].discard(user)
+
+    def accessible(self, user: str) -> list:
+        results: list[str] = []
+        def dfs(node: dict, path: str, inherited: bool) -> None:
+            # Explicit revoke at this node overrides any inherited grant.
+            revoked = user in node["revokes"]
+            granted = user in node["grants"]
+            # Effective access: (explicitly granted OR inherited) AND NOT explicitly revoked.
+            effective = (granted or inherited) and not revoked
+            # Report this node only if it's the topmost accessible node in this branch.
+            if effective and not inherited:
+                results.append(path)
+            for child in node["children"]:
+                child_path = path.rstrip("/") + "/" + child["name"]
+                dfs(child, child_path, effective)
+        for child in self._root["children"]:
+            dfs(child, "/" + child["name"], False)
+        return sorted(results)
+`;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 13. 2D CANVAS ORDERING
+// ══════════════════════════════════════════════════════════════════════════════
+
+const CANVAS_BASE_S1 = `\
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+@dataclass
+class CanvasObject:
+    id: str
+    x: float   # left edge
+    y: float   # top edge
+    w: float   # width
+    h: float   # height
+
+class CanvasSorterBase(ABC):
+    @abstractmethod
+    def sort(self, objects: list) -> list:
+        """Return a list of object ids sorted in reading order:
+        top-to-bottom first, then left-to-right within the same row.
+        Each element of 'objects' is a CanvasObject."""
+        pass
+`;
+
+const CANVAS_STARTER_S1 = `\
+class CanvasSorter(CanvasSorterBase):
+    def sort(self, objects: list) -> list:
+        pass  # TODO: sort by (y, x) and return ids
+`;
+
+const CANVAS_SOL_S1 = `\
+class CanvasSorter(CanvasSorterBase):
+    def sort(self, objects: list) -> list:
+        # Reading order: primary sort key is y (top edge), secondary is x (left edge).
+        # This is the same order a human reads text on a page.
+        # sorted() is stable and O(n log n).
+        return [obj.id for obj in sorted(objects, key=lambda o: (o.y, o.x))]
+`;
+
+const CANVAS_BASE_S2 = `\
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+@dataclass
+class CanvasObject:
+    id: str
+    x: float
+    y: float
+    w: float
+    h: float
+
+class CanvasSorterBase(ABC):
+    @abstractmethod
+    def sort(self, objects: list) -> list:
+        pass
+
+    @abstractmethod
+    def sort_rows(self, objects: list) -> list:
+        """Group objects into rows where their y-ranges overlap, then sort
+        rows top-to-bottom and objects within each row left-to-right.
+        Returns a list of object ids."""
+        pass
+`;
+
+const CANVAS_STARTER_S2 = `\
+class CanvasSorter(CanvasSorterBase):
+    def sort(self, objects: list) -> list:
+        return [obj.id for obj in sorted(objects, key=lambda o: (o.y, o.x))]
+
+    def sort_rows(self, objects: list) -> list:
+        pass  # TODO: group by overlapping y-ranges, then sort within rows
+`;
+
+const CANVAS_SOL_S2 = `\
+class CanvasSorter(CanvasSorterBase):
+    def sort(self, objects: list) -> list:
+        return [obj.id for obj in sorted(objects, key=lambda o: (o.y, o.x))]
+
+    def sort_rows(self, objects: list) -> list:
+        if not objects:
+            return []
+        # Sort by top edge first so we process objects top-to-bottom.
+        sorted_objs = sorted(objects, key=lambda o: o.y)
+        rows: list[list] = []
+        for obj in sorted_objs:
+            placed = False
+            for row in rows:
+                # Two objects are in the same row if their y-ranges overlap.
+                # Overlap condition: obj starts before existing ends AND obj ends after existing starts.
+                for existing in row:
+                    if obj.y < existing.y + existing.h and obj.y + obj.h > existing.y:
+                        row.append(obj)
+                        placed = True
+                        break
+                if placed:
+                    break
+            if not placed:
+                # No overlapping row found — start a new row.
+                rows.append([obj])
+        # Within each row, sort left-to-right by x.
+        result: list[str] = []
+        for row in rows:
+            result.extend(obj.id for obj in sorted(row, key=lambda o: o.x))
+        return result
+`;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 14. COMPONENT TREE TRAVERSAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+const COMP_BASE_S1 = `\
+from abc import ABC, abstractmethod
+
+class ComponentTreeBase(ABC):
+    ROOT = "__root__"  # virtual root id — do not include in results
+
+    @abstractmethod
+    def add(self, parent_id: str, node_id: str, node_type: str) -> None:
+        """Add a component node as a child of parent_id.
+        Use ComponentTreeBase.ROOT as parent_id to add top-level nodes."""
+        pass
+
+    @abstractmethod
+    def flatten(self) -> list:
+        """Return all node ids in DFS pre-order (parent before its children).
+        Do not include ROOT itself."""
+        pass
+`;
+
+const COMP_STARTER_S1 = `\
+class ComponentTree(ComponentTreeBase):
+    def __init__(self):
+        pass  # TODO: initialise the tree with a virtual root node
+
+    def add(self, parent_id: str, node_id: str, node_type: str) -> None:
+        pass  # TODO: attach node under parent
+
+    def flatten(self) -> list:
+        pass  # TODO: DFS pre-order, skip ROOT
+`;
+
+const COMP_SOL_S1 = `\
+class ComponentTree(ComponentTreeBase):
+    def __init__(self):
+        # Each node: {id, type, children: list}
+        # Virtual root is never included in results — it just anchors the tree.
+        self._root = {"id": self.ROOT, "type": "root", "children": []}
+        self._nodes: dict[str, dict] = {self.ROOT: self._root}
+
+    def add(self, parent_id: str, node_id: str, node_type: str) -> None:
+        node = {"id": node_id, "type": node_type, "children": []}
+        self._nodes[node_id] = node
+        self._nodes[parent_id]["children"].append(node)
+
+    def flatten(self) -> list:
+        result: list[str] = []
+        def dfs(node: dict) -> None:
+            # Pre-order: visit node before its children.
+            if node["id"] != self.ROOT:
+                result.append(node["id"])
+            for child in node["children"]:
+                dfs(child)
+        dfs(self._root)
+        return result
+`;
+
+const COMP_BASE_S2 = `\
+from abc import ABC, abstractmethod
+
+class ComponentTreeBase(ABC):
+    ROOT = "__root__"
+
+    @abstractmethod
+    def add(self, parent_id: str, node_id: str, node_type: str) -> None:
+        pass
+
+    @abstractmethod
+    def flatten(self) -> list:
+        pass
+
+    @abstractmethod
+    def find_by_type(self, node_type: str) -> list:
+        """Return ids of all nodes with the given type, in DFS pre-order."""
+        pass
+
+    @abstractmethod
+    def depth(self, node_id: str) -> int:
+        """Return the depth of node_id. Top-level nodes (direct children of ROOT) have depth 1."""
+        pass
+`;
+
+const COMP_STARTER_S2 = `\
+class ComponentTree(ComponentTreeBase):
+    def __init__(self):
+        pass  # TODO: store parent reference so depth() can walk upward
+
+    def add(self, parent_id: str, node_id: str, node_type: str) -> None:
+        pass  # TODO: record parent_id on each node
+
+    def flatten(self) -> list:
+        pass
+
+    def find_by_type(self, node_type: str) -> list:
+        pass  # TODO: filter flatten() by type
+
+    def depth(self, node_id: str) -> int:
+        pass  # TODO: walk parent pointers until ROOT, count steps
+`;
+
+const COMP_SOL_S2 = `\
+class ComponentTree(ComponentTreeBase):
+    def __init__(self):
+        # Store parent_id on each node so depth() can walk upward in O(depth).
+        self._root = {"id": self.ROOT, "type": "root", "children": [], "parent": None}
+        self._nodes: dict[str, dict] = {self.ROOT: self._root}
+
+    def add(self, parent_id: str, node_id: str, node_type: str) -> None:
+        node = {"id": node_id, "type": node_type, "children": [], "parent": parent_id}
+        self._nodes[node_id] = node
+        self._nodes[parent_id]["children"].append(node)
+
+    def flatten(self) -> list:
+        result: list[str] = []
+        def dfs(node: dict) -> None:
+            if node["id"] != self.ROOT:
+                result.append(node["id"])
+            for child in node["children"]:
+                dfs(child)
+        dfs(self._root)
+        return result
+
+    def find_by_type(self, node_type: str) -> list:
+        # Reuse flatten() to get DFS order, then filter by type.
+        # O(n) — visits every node once.
+        return [nid for nid in self.flatten() if self._nodes[nid]["type"] == node_type]
+
+    def depth(self, node_id: str) -> int:
+        # Walk parent pointers until we reach ROOT.
+        # Depth of ROOT's direct children is 1.
+        depth = 0
+        current = node_id
+        while self._nodes[current]["parent"] is not None:
+            depth += 1
+            current = self._nodes[current]["parent"]
+        return depth
+`;
+
+const COMP_BASE_S3 = `\
+from abc import ABC, abstractmethod
+
+class ComponentTreeBase(ABC):
+    ROOT = "__root__"
+
+    @abstractmethod
+    def add(self, parent_id: str, node_id: str, node_type: str,
+            master_id: str = None) -> None:
+        """Add a node. If master_id is given, this is an instance that
+        inherits properties from the master component."""
+        pass
+
+    @abstractmethod
+    def flatten(self) -> list:
+        pass
+
+    @abstractmethod
+    def find_by_type(self, node_type: str) -> list:
+        pass
+
+    @abstractmethod
+    def depth(self, node_id: str) -> int:
+        pass
+
+    @abstractmethod
+    def set_prop(self, node_id: str, key: str, value) -> None:
+        """Set a property on a node. Overrides the master's value for this instance."""
+        pass
+
+    @abstractmethod
+    def get_prop(self, node_id: str, key: str):
+        """Get a property. Falls back to the master component if not set locally.
+        Returns None if not found anywhere."""
+        pass
+`;
+
+const COMP_STARTER_S3 = `\
+class ComponentTree(ComponentTreeBase):
+    def __init__(self):
+        pass  # TODO: store props dict and master_id per node
+
+    def add(self, parent_id: str, node_id: str, node_type: str,
+            master_id: str = None) -> None:
+        pass  # TODO: record master_id for instance nodes
+
+    def flatten(self) -> list:
+        pass
+
+    def find_by_type(self, node_type: str) -> list:
+        pass
+
+    def depth(self, node_id: str) -> int:
+        pass
+
+    def set_prop(self, node_id: str, key: str, value) -> None:
+        pass  # TODO: store in node's own props dict
+
+    def get_prop(self, node_id: str, key: str):
+        pass  # TODO: own props first, then master's props, then None
+`;
+
+const COMP_SOL_S3 = `\
+class ComponentTree(ComponentTreeBase):
+    def __init__(self):
+        self._root = {"id": self.ROOT, "type": "root", "children": [],
+                      "parent": None, "props": {}, "master": None}
+        self._nodes: dict[str, dict] = {self.ROOT: self._root}
+
+    def add(self, parent_id: str, node_id: str, node_type: str,
+            master_id: str = None) -> None:
+        node = {"id": node_id, "type": node_type, "children": [],
+                "parent": parent_id, "props": {}, "master": master_id}
+        self._nodes[node_id] = node
+        self._nodes[parent_id]["children"].append(node)
+
+    def flatten(self) -> list:
+        result: list[str] = []
+        def dfs(node: dict) -> None:
+            if node["id"] != self.ROOT:
+                result.append(node["id"])
+            for child in node["children"]:
+                dfs(child)
+        dfs(self._root)
+        return result
+
+    def find_by_type(self, node_type: str) -> list:
+        return [nid for nid in self.flatten() if self._nodes[nid]["type"] == node_type]
+
+    def depth(self, node_id: str) -> int:
+        depth = 0
+        current = node_id
+        while self._nodes[current]["parent"] is not None:
+            depth += 1
+            current = self._nodes[current]["parent"]
+        return depth
+
+    def set_prop(self, node_id: str, key: str, value) -> None:
+        # Store in the node's own props dict — this overrides the master's value.
+        self._nodes[node_id]["props"][key] = value
+
+    def get_prop(self, node_id: str, key: str):
+        node = self._nodes[node_id]
+        # Own props take priority over inherited props.
+        if key in node["props"]:
+            return node["props"][key]
+        # Fall back to master component's props (one level of inheritance).
+        if node["master"] and node["master"] in self._nodes:
+            return self._nodes[node["master"]]["props"].get(key, None)
+        return None
+`;
+
+export async function seedFigmaProblems(): Promise<void> {
+  // ── 11. Layer / Document System ─────────────────────────────────────────────
+  await seedStagedProblemIfNotExists(
+    {
+      number: 11001,
+      slug: "layer-document-system",
+      title: "Layer Document System",
+      difficulty: "Medium",
+      description: `## Layer Document System\n\nIn Figma every design is a **document** made up of named layers. Each layer can have arbitrary properties — position, fill colour, opacity, and so on.\n\nYou will build a \`LayerDocument\` class that supports applying property changes and undoing/redoing them, just like Ctrl+Z in a real editor.\n\n**Stages:**\n1. Basic \`apply\` / \`layer\` — store and retrieve layer properties.\n2. \`undo()\` — revert the last change.\n3. \`redo()\` — re-apply a previously undone change.\n4. \`begin_batch\` / \`commit_batch\` — group multiple changes into one atomic undo unit.\n\nThis is one of the most commonly reported Figma coding interview questions.`,
+      starterCode: LAYER_STARTER_S1,
+      tags: "figma",
+      badges: "figma",
+    },
+    [
+      {
+        stageNumber: 1,
+        title: "Apply and Retrieve",
+        description: `## Stage 1: Apply and Retrieve\n\nImplement \`apply(layer_id, prop, value)\` and \`layer(layer_id)\`.\n\n**Data structure:** a dict of dicts — \`{layer_id: {prop: value}}\`.\n\n- \`apply\` sets a property on a layer (creates the layer if it doesn't exist yet).\n- \`layer\` returns a copy of all properties for that layer (empty dict if unknown).\n\n\`\`\`python\ndoc = LayerDocument()\ndoc.apply("rect1", "x", 10)\ndoc.apply("rect1", "y", 20)\ndoc.apply("rect1", "x", 30)  # overwrite\nprint(doc.layer("rect1"))   # {"x": 30, "y": 20}\n\`\`\``,
+        baseClass: LAYER_BASE_S1,
+        starterCode: LAYER_STARTER_S1,
+        solution: LAYER_SOL_S1,
+        solutionExplanation: "Use a dict of dicts: _layers[layer_id][prop] = value. apply() lazy-creates the inner dict. layer() returns a shallow copy to prevent external mutation.",
+        testCases: [
+          {
+            description: "apply overwrites previous value; layer returns current state",
+            inputData: `doc = LayerDocument()\ndoc.apply("rect1", "x", 10)\ndoc.apply("rect1", "y", 20)\ndoc.apply("rect1", "x", 30)\n_result = doc.layer("rect1")`,
+            expectedOutput: `{"x": 30, "y": 20}`,
+            orderIndex: 0,
+          },
+          {
+            description: "layer returns empty dict for unknown layer_id",
+            inputData: `doc = LayerDocument()\n_result = doc.layer("nonexistent")`,
+            expectedOutput: `{}`,
+            orderIndex: 1,
+          },
+          {
+            description: "multiple layers are independent",
+            inputData: `doc = LayerDocument()\ndoc.apply("a", "fill", "red")\ndoc.apply("b", "fill", "blue")\n_result = [doc.layer("a")["fill"], doc.layer("b")["fill"]]`,
+            expectedOutput: `["red", "blue"]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 2,
+        title: "Undo",
+        description: `## Stage 2: Undo\n\nAdd \`undo()\` — revert the most recent \`apply()\` call.\n\n**Data structure:** a history stack. Before overwriting a property, push \`(layer_id, prop, old_value, new_value)\` onto the stack. \`undo()\` pops the top entry and restores the old value. If \`old_value\` was \`None\` the property didn't exist before and should be deleted.\n\n\`\`\`python\ndoc = LayerDocument()\ndoc.apply("rect1", "x", 10)\ndoc.apply("rect1", "x", 20)\ndoc.undo()\nprint(doc.layer("rect1")["x"])  # 10\n\`\`\``,
+        baseClass: LAYER_BASE_S2,
+        starterCode: LAYER_STARTER_S2,
+        solution: LAYER_SOL_S2,
+        solutionExplanation: "Add a _history list. apply() records (layer_id, prop, old, new) before overwriting. undo() pops and restores old; if old is None the property is deleted.",
+        testCases: [
+          {
+            description: "undo restores previous value",
+            inputData: `doc = LayerDocument()\ndoc.apply("rect1", "x", 10)\ndoc.apply("rect1", "x", 20)\ndoc.undo()\n_result = doc.layer("rect1")["x"]`,
+            expectedOutput: `10`,
+            orderIndex: 0,
+          },
+          {
+            description: "undo removes property when it was newly created",
+            inputData: `doc = LayerDocument()\ndoc.apply("a", "fill", "red")\ndoc.undo()\n_result = doc.layer("a")`,
+            expectedOutput: `{}`,
+            orderIndex: 1,
+          },
+          {
+            description: "undo on empty history returns False",
+            inputData: `doc = LayerDocument()\n_result = doc.undo()`,
+            expectedOutput: `False`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 3,
+        title: "Redo",
+        description: `## Stage 3: Redo\n\nAdd \`redo()\` — re-apply the last undone operation (Ctrl+Shift+Z).\n\n**Two-stack pattern:** maintain an \`_undo_stack\` and a \`_redo_stack\`.\n- \`apply()\` pushes to \`_undo_stack\` and **clears** \`_redo_stack\` (a new edit invalidates the redo history).\n- \`undo()\` pops from \`_undo_stack\`, pushes to \`_redo_stack\`, and reverses the change.\n- \`redo()\` pops from \`_redo_stack\`, pushes back to \`_undo_stack\`, and re-applies the change.\n\n\`\`\`python\ndoc = LayerDocument()\ndoc.apply("r", "x", 5)\ndoc.undo()\ndoc.redo()\nprint(doc.layer("r")["x"])  # 5\n\`\`\``,
+        baseClass: LAYER_BASE_S3,
+        starterCode: LAYER_STARTER_S3,
+        solution: LAYER_SOL_S3,
+        solutionExplanation: "Two-stack undo/redo. apply() clears redo stack. undo() moves entry to redo stack. redo() moves entry back to undo stack and re-applies.",
+        testCases: [
+          {
+            description: "undo then redo restores value",
+            inputData: `doc = LayerDocument()\ndoc.apply("r", "x", 5)\ndoc.undo()\ndoc.redo()\n_result = doc.layer("r")["x"]`,
+            expectedOutput: `5`,
+            orderIndex: 0,
+          },
+          {
+            description: "new apply after undo clears redo stack",
+            inputData: `doc = LayerDocument()\ndoc.apply("r", "x", 1)\ndoc.apply("r", "x", 2)\ndoc.undo()\ndoc.apply("r", "x", 3)\n_result = doc.redo()`,
+            expectedOutput: `False`,
+            orderIndex: 1,
+          },
+          {
+            description: "multiple undo then one redo",
+            inputData: `doc = LayerDocument()\ndoc.apply("r", "x", 10)\ndoc.apply("r", "y", 20)\ndoc.undo()\ndoc.undo()\ndoc.redo()\n_result = doc.layer("r")`,
+            expectedOutput: `{"x": 10}`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 4,
+        title: "Batch Commit",
+        description: `## Stage 4: Batch Commit\n\nAdd \`begin_batch()\` and \`commit_batch()\` to group multiple \`apply()\` calls into a single atomic undo unit.\n\n**Motivation:** In Figma, moving a group of layers updates many properties at once. A single Ctrl+Z should undo all of them together, not one by one.\n\n**Implementation:** change the undo/redo stacks to hold **groups** (lists of ops) instead of individual ops.\n- Outside a batch: each \`apply()\` creates a one-element group.\n- Inside a batch: \`apply()\` collects ops into a buffer without touching the undo stack.\n- \`commit_batch()\` pushes the buffer as one group.\n- \`undo()\` / \`redo()\` reverse/re-apply the entire group at once.\n\n\`\`\`python\ndoc = LayerDocument()\ndoc.begin_batch()\ndoc.apply("r", "x", 10)\ndoc.apply("r", "y", 20)\ndoc.commit_batch()\ndoc.undo()  # undoes both x and y in one step\nprint(doc.layer("r"))  # {}\n\`\`\``,
+        baseClass: LAYER_BASE_S4,
+        starterCode: LAYER_STARTER_S4,
+        solution: LAYER_SOL_S4,
+        solutionExplanation: "Stacks now hold lists of ops (groups). apply() outside a batch creates a [op] group; inside a batch it appends to _batch buffer. commit_batch() pushes the buffer as one group. undo/redo reverse/apply the whole group.",
+        testCases: [
+          {
+            description: "undo reverses all ops in a batch at once",
+            inputData: `doc = LayerDocument()\ndoc.begin_batch()\ndoc.apply("r", "x", 10)\ndoc.apply("r", "y", 20)\ndoc.apply("r", "fill", "red")\ndoc.commit_batch()\ndoc.undo()\n_result = doc.layer("r")`,
+            expectedOutput: `{}`,
+            orderIndex: 0,
+          },
+          {
+            description: "redo re-applies entire batch",
+            inputData: `doc = LayerDocument()\ndoc.begin_batch()\ndoc.apply("a", "x", 1)\ndoc.apply("b", "x", 2)\ndoc.commit_batch()\ndoc.undo()\ndoc.redo()\n_result = [doc.layer("a").get("x"), doc.layer("b").get("x")]`,
+            expectedOutput: `[1, 2]`,
+            orderIndex: 1,
+          },
+          {
+            description: "undo batch leaves earlier single-op intact",
+            inputData: `doc = LayerDocument()\ndoc.apply("r", "x", 5)\ndoc.begin_batch()\ndoc.apply("r", "x", 10)\ndoc.apply("r", "y", 20)\ndoc.commit_batch()\ndoc.undo()\n_result = doc.layer("r")`,
+            expectedOutput: `{"x": 5}`,
+            orderIndex: 2,
+          },
+        ],
+      },
+    ]
+  );
+
+  // ── 12. File System with Permissions ────────────────────────────────────────
+  await seedStagedProblemIfNotExists(
+    {
+      number: 12001,
+      slug: "file-system-permissions",
+      title: "File System with Permissions",
+      difficulty: "Medium",
+      description: `## File System with Permissions\n\nDesign a simple in-memory file system tree that supports permission-based access control — similar to how Figma manages who can view or edit a file.\n\n**Stages:**\n1. Build the tree and implement \`find(name)\`.\n2. Add \`grant(path, user)\` and \`accessible(user)\` — return the topmost accessible paths.\n3. Add \`revoke(path, user)\` — explicit revoke overrides inherited access.\n\nThis problem tests tree traversal (DFS), inheritance semantics, and clean state management.`,
+      starterCode: FS_STARTER_S1,
+      tags: "figma",
+      badges: "figma",
+    },
+    [
+      {
+        stageNumber: 1,
+        title: "Build the Tree and Find",
+        description: `## Stage 1: Build the Tree and Find\n\nImplement \`add(parent_path, name, node_type)\` and \`find(name)\`.\n\n**Tree structure:** each node stores its name, type (\`"file"\` or \`"dir"\`), and a list of children. Keep a flat index \`{path: node}\` for O(1) parent lookup.\n\n- \`add\` attaches a new node under \`parent_path\`. The root path is \`"/"\`.\n- \`find\` does a DFS and returns a **sorted** list of absolute paths where a node with the given name exists.\n\n\`\`\`python\nfs = FileSystem()\nfs.add("/", "docs", "dir")\nfs.add("/docs", "report.txt", "file")\nfs.add("/", "report.txt", "file")\nprint(fs.find("report.txt"))  # ["/docs/report.txt", "/report.txt"]\n\`\`\``,
+        baseClass: FS_BASE_S1,
+        starterCode: FS_STARTER_S1,
+        solution: FS_SOL_S1,
+        solutionExplanation: "Store nodes as dicts with a children list. Keep a flat path->node index for O(1) add. find() does DFS and collects matching paths, then sorts.",
+        testCases: [
+          {
+            description: "find returns all paths matching the name, sorted",
+            inputData: `fs = FileSystem()\nfs.add("/", "docs", "dir")\nfs.add("/docs", "report.txt", "file")\nfs.add("/", "report.txt", "file")\n_result = fs.find("report.txt")`,
+            expectedOutput: `["/docs/report.txt", "/report.txt"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "find works for deeply nested files",
+            inputData: `fs = FileSystem()\nfs.add("/", "a", "dir")\nfs.add("/a", "b", "dir")\nfs.add("/a/b", "c.txt", "file")\n_result = fs.find("c.txt")`,
+            expectedOutput: `["/a/b/c.txt"]`,
+            orderIndex: 1,
+          },
+          {
+            description: "find returns empty list when name not found",
+            inputData: `fs = FileSystem()\n_result = fs.find("missing.txt")`,
+            expectedOutput: `[]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 2,
+        title: "Grant Access and Accessible",
+        description: `## Stage 2: Grant Access and Accessible\n\nAdd \`grant(path, user)\` and \`accessible(user)\`.\n\n**Semantics:** \`accessible\` returns the **topmost** paths where \`user\` has been granted access. A path is topmost if no ancestor also grants access to the same user (because access to a directory implies access to everything inside it).\n\n**Algorithm:** DFS with a flag \`ancestor_has_access\`. When you reach a node where \`user\` is in the granted set AND \`ancestor_has_access\` is False, add it to results and continue DFS with \`ancestor_has_access = True\`.\n\n\`\`\`python\nfs = FileSystem()\nfs.add("/", "docs", "dir")\nfs.add("/docs", "secret.txt", "file")\nfs.grant("/docs", "alice")\nprint(fs.accessible("alice"))  # ["/docs"]\n\`\`\``,
+        baseClass: FS_BASE_S2,
+        starterCode: FS_STARTER_S2,
+        solution: FS_SOL_S2,
+        solutionExplanation: "DFS with ancestor_has_access flag. When user is in node's grants AND ancestor_has_access is False, report as topmost and continue DFS with flag=True.",
+        testCases: [
+          {
+            description: "accessible returns topmost granted paths",
+            inputData: `fs = FileSystem()\nfs.add("/", "docs", "dir")\nfs.add("/docs", "report.txt", "file")\nfs.add("/docs", "private.txt", "file")\nfs.add("/", "public.txt", "file")\nfs.grant("/docs", "alice")\nfs.grant("/public.txt", "alice")\n_result = fs.accessible("alice")`,
+            expectedOutput: `["/docs", "/public.txt"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "child grant is subsumed by parent grant",
+            inputData: `fs = FileSystem()\nfs.add("/", "a", "dir")\nfs.add("/a", "b", "dir")\nfs.grant("/a", "bob")\nfs.grant("/a/b", "bob")\n_result = fs.accessible("bob")`,
+            expectedOutput: `["/a"]`,
+            orderIndex: 1,
+          },
+          {
+            description: "accessible returns empty list when no grants",
+            inputData: `fs = FileSystem()\nfs.add("/", "x", "file")\n_result = fs.accessible("carol")`,
+            expectedOutput: `[]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 3,
+        title: "Revoke Access",
+        description: `## Stage 3: Revoke Access\n\nAdd \`revoke(path, user)\`. An explicit revoke at a node **overrides** any inherited grant from an ancestor.\n\n**Semantics:** each node now has two sets — \`grants\` and \`revokes\`. During DFS:\n- If \`user\` is in \`revokes\`: effective access is False (regardless of inheritance).\n- If \`user\` is in \`grants\`: effective access is True.\n- Otherwise: inherit from parent.\n\n\`\`\`python\nfs = FileSystem()\nfs.add("/", "docs", "dir")\nfs.add("/docs", "secret.txt", "file")\nfs.grant("/docs", "alice")\nfs.revoke("/docs/secret.txt", "alice")\nprint(fs.accessible("alice"))  # ["/docs"]  (secret.txt is blocked)\n\`\`\``,
+        baseClass: FS_BASE_S3,
+        starterCode: FS_STARTER_S3,
+        solution: FS_SOL_S3,
+        solutionExplanation: "Each node has grants and revokes sets. DFS computes effective = (granted or inherited) and not revoked. Topmost nodes where effective=True and inherited=False are reported.",
+        testCases: [
+          {
+            description: "revoke blocks access to a child even when parent grants",
+            inputData: `fs = FileSystem()\nfs.add("/", "docs", "dir")\nfs.add("/docs", "secret.txt", "file")\nfs.add("/docs", "public.txt", "file")\nfs.grant("/docs", "alice")\nfs.revoke("/docs/secret.txt", "alice")\n_result = fs.accessible("alice")`,
+            expectedOutput: `["/docs"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "explicit grant on child after parent revoke restores access",
+            inputData: `fs = FileSystem()\nfs.add("/", "a", "dir")\nfs.add("/a", "b", "file")\nfs.grant("/a", "bob")\nfs.revoke("/a", "bob")\nfs.grant("/a/b", "bob")\n_result = fs.accessible("bob")`,
+            expectedOutput: `["/a/b"]`,
+            orderIndex: 1,
+          },
+          {
+            description: "revoke without prior grant returns empty",
+            inputData: `fs = FileSystem()\nfs.add("/", "x", "dir")\nfs.add("/x", "y", "file")\nfs.grant("/x", "carol")\nfs.revoke("/x", "carol")\n_result = fs.accessible("carol")`,
+            expectedOutput: `[]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+    ]
+  );
+
+  // ── 13. 2D Canvas Ordering ───────────────────────────────────────────────────
+  await seedStagedProblemIfNotExists(
+    {
+      number: 13001,
+      slug: "canvas-ordering",
+      title: "2D Canvas Ordering",
+      difficulty: "Easy",
+      description: `## 2D Canvas Ordering\n\nIn Figma, objects on a canvas are rectangles with a position \`(x, y)\` and size \`(w, h)\`. When exporting or processing a design, you often need to visit objects in **reading order** — top-to-bottom, left-to-right.\n\n**Stages:**\n1. Simple sort by \`(y, x)\` — works when objects don't overlap vertically.\n2. Row-based grouping — objects whose y-ranges overlap belong to the same row and should be sorted together.\n\nThis problem tests sorting, coordinate geometry, and greedy grouping.`,
+      starterCode: CANVAS_STARTER_S1,
+      tags: "figma",
+      badges: "figma",
+    },
+    [
+      {
+        stageNumber: 1,
+        title: "Sort by Position",
+        description: `## Stage 1: Sort by Position\n\nImplement \`sort(objects)\` — return a list of object ids sorted in reading order.\n\n**Rule:** sort primarily by \`y\` (top edge, ascending), then by \`x\` (left edge, ascending) as a tiebreaker.\n\nEach element of \`objects\` is a \`CanvasObject\` with fields \`id\`, \`x\`, \`y\`, \`w\`, \`h\`.\n\n\`\`\`python\nsorter = CanvasSorter()\nobjects = [\n    CanvasObject("B", x=100, y=50, w=50, h=50),\n    CanvasObject("A", x=10,  y=50, w=50, h=50),\n    CanvasObject("C", x=50,  y=10, w=50, h=50),\n]\nprint(sorter.sort(objects))  # ["C", "A", "B"]\n\`\`\``,
+        baseClass: CANVAS_BASE_S1,
+        starterCode: CANVAS_STARTER_S1,
+        solution: CANVAS_SOL_S1,
+        solutionExplanation: "Sort by (y, x) tuple key. Python's sorted() is stable and O(n log n). Return the id field of each sorted object.",
+        testCases: [
+          {
+            description: "objects sorted top-to-bottom then left-to-right",
+            inputData: `sorter = CanvasSorter()\nobjects = [CanvasObject("B", x=100, y=50, w=50, h=50), CanvasObject("A", x=10, y=50, w=50, h=50), CanvasObject("C", x=50, y=10, w=50, h=50)]\n_result = sorter.sort(objects)`,
+            expectedOutput: `["C", "A", "B"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "single object returns list with that id",
+            inputData: `sorter = CanvasSorter()\nobjects = [CanvasObject("X", x=0, y=0, w=10, h=10)]\n_result = sorter.sort(objects)`,
+            expectedOutput: `["X"]`,
+            orderIndex: 1,
+          },
+          {
+            description: "same y, sorted by x",
+            inputData: `sorter = CanvasSorter()\nobjects = [CanvasObject("D", x=200, y=100, w=20, h=20), CanvasObject("E", x=10, y=100, w=20, h=20), CanvasObject("F", x=100, y=0, w=20, h=20)]\n_result = sorter.sort(objects)`,
+            expectedOutput: `["F", "E", "D"]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 2,
+        title: "Row-Based Grouping",
+        description: `## Stage 2: Row-Based Grouping\n\nImplement \`sort_rows(objects)\` — a smarter sort that groups objects into rows.\n\n**Problem with simple (y, x) sort:** if object A is at y=0 and object B is at y=10 but both have height 40, they visually overlap and belong in the same row. A simple y-sort would put them in separate rows.\n\n**Rule:** two objects are in the same row if their **y-ranges overlap** (i.e. \`A.y < B.y + B.h\` AND \`A.y + A.h > B.y\`). Rows are sorted top-to-bottom by their minimum y; objects within a row are sorted left-to-right by x.\n\n\`\`\`python\nsorter = CanvasSorter()\nobjects = [\n    CanvasObject("A", x=10,  y=0,  w=50, h=40),\n    CanvasObject("B", x=100, y=10, w=50, h=40),  # overlaps A\n    CanvasObject("C", x=50,  y=60, w=50, h=40),  # new row\n]\nprint(sorter.sort_rows(objects))  # ["A", "B", "C"]\n\`\`\``,
+        baseClass: CANVAS_BASE_S2,
+        starterCode: CANVAS_STARTER_S2,
+        solution: CANVAS_SOL_S2,
+        solutionExplanation: "Sort by y, then greedily assign each object to the first row it overlaps with. Within each row, sort by x. Overlap: obj.y < existing.y+existing.h AND obj.y+obj.h > existing.y.",
+        testCases: [
+          {
+            description: "overlapping objects grouped into same row",
+            inputData: `sorter = CanvasSorter()\nobjects = [CanvasObject("A", x=10, y=0, w=50, h=40), CanvasObject("B", x=100, y=10, w=50, h=40), CanvasObject("C", x=50, y=60, w=50, h=40)]\n_result = sorter.sort_rows(objects)`,
+            expectedOutput: `["A", "B", "C"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "non-overlapping objects in separate rows, sorted by x within row",
+            inputData: `sorter = CanvasSorter()\nobjects = [CanvasObject("X", x=200, y=0, w=20, h=20), CanvasObject("Y", x=10, y=0, w=20, h=20), CanvasObject("Z", x=100, y=50, w=20, h=20)]\n_result = sorter.sort_rows(objects)`,
+            expectedOutput: `["Y", "X", "Z"]`,
+            orderIndex: 1,
+          },
+          {
+            description: "empty list returns empty list",
+            inputData: `sorter = CanvasSorter()\n_result = sorter.sort_rows([])`,
+            expectedOutput: `[]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+    ]
+  );
+
+  // ── 14. Component Tree Traversal ─────────────────────────────────────────────
+  await seedStagedProblemIfNotExists(
+    {
+      number: 14001,
+      slug: "component-tree-traversal",
+      title: "Component Tree Traversal",
+      difficulty: "Medium",
+      description: `## Component Tree Traversal\n\nFigma's design hierarchy is a tree of components — frames contain groups, groups contain shapes, shapes have properties. This problem asks you to build and traverse that tree.\n\n**Stages:**\n1. Build the tree and implement \`flatten()\` — DFS pre-order traversal.\n2. Add \`find_by_type()\` and \`depth()\`.\n3. Add component inheritance — instances inherit properties from a master component but can override them.\n\nThis mirrors Figma's actual component/instance model and is a common system design coding question.`,
+      starterCode: COMP_STARTER_S1,
+      tags: "figma",
+      badges: "figma",
+    },
+    [
+      {
+        stageNumber: 1,
+        title: "Build and Flatten",
+        description: `## Stage 1: Build and Flatten\n\nImplement \`add(parent_id, node_id, node_type)\` and \`flatten()\`.\n\n**Tree structure:** each node has an id, type, and list of children. Use a virtual root node (\`ComponentTreeBase.ROOT = "__root__"\`) to anchor the tree — it should never appear in \`flatten()\` results.\n\n\`flatten()\` returns all node ids in **DFS pre-order** (parent before its children).\n\n\`\`\`python\ntree = ComponentTree()\ntree.add(ComponentTree.ROOT, "frame1", "frame")\ntree.add("frame1", "group1", "group")\ntree.add("group1", "rect1", "rectangle")\nprint(tree.flatten())  # ["frame1", "group1", "rect1"]\n\`\`\``,
+        baseClass: COMP_BASE_S1,
+        starterCode: COMP_STARTER_S1,
+        solution: COMP_SOL_S1,
+        solutionExplanation: "Store nodes as dicts with a children list. Keep a flat id->node index. flatten() does recursive DFS pre-order, skipping ROOT.",
+        testCases: [
+          {
+            description: "flatten returns DFS pre-order (parent before children)",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "frame1", "frame")\ntree.add("frame1", "group1", "group")\ntree.add("group1", "rect1", "rectangle")\ntree.add("group1", "text1", "text")\ntree.add("frame1", "rect2", "rectangle")\n_result = tree.flatten()`,
+            expectedOutput: `["frame1", "group1", "rect1", "text1", "rect2"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "single top-level node",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "a", "frame")\n_result = tree.flatten()`,
+            expectedOutput: `["a"]`,
+            orderIndex: 1,
+          },
+          {
+            description: "empty tree returns empty list",
+            inputData: `tree = ComponentTree()\n_result = tree.flatten()`,
+            expectedOutput: `[]`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 2,
+        title: "Find by Type and Depth",
+        description: `## Stage 2: Find by Type and Depth\n\nAdd \`find_by_type(node_type)\` and \`depth(node_id)\`.\n\n- \`find_by_type\` returns ids of all nodes with the given type, in DFS pre-order. Hint: reuse \`flatten()\`.\n- \`depth\` returns the depth of a node. Direct children of ROOT have depth 1. Hint: store the parent id on each node and walk upward.\n\n\`\`\`python\ntree = ComponentTree()\ntree.add(ComponentTree.ROOT, "f1", "frame")\ntree.add("f1", "g1", "group")\ntree.add("g1", "r1", "rectangle")\nprint(tree.find_by_type("rectangle"))  # ["r1"]\nprint(tree.depth("r1"))               # 3\n\`\`\``,
+        baseClass: COMP_BASE_S2,
+        starterCode: COMP_STARTER_S2,
+        solution: COMP_SOL_S2,
+        solutionExplanation: "find_by_type filters flatten() by type. depth() walks parent pointers until ROOT, counting steps. Store parent_id on each node in add().",
+        testCases: [
+          {
+            description: "find_by_type returns all matching nodes in DFS order",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "f1", "frame")\ntree.add("f1", "g1", "group")\ntree.add("g1", "r1", "rectangle")\ntree.add("g1", "r2", "rectangle")\ntree.add("f1", "t1", "text")\n_result = tree.find_by_type("rectangle")`,
+            expectedOutput: `["r1", "r2"]`,
+            orderIndex: 0,
+          },
+          {
+            description: "depth of deeply nested node",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "f1", "frame")\ntree.add("f1", "g1", "group")\ntree.add("g1", "r1", "rectangle")\n_result = tree.depth("r1")`,
+            expectedOutput: `3`,
+            orderIndex: 1,
+          },
+          {
+            description: "depth of top-level node is 1",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "f1", "frame")\n_result = tree.depth("f1")`,
+            expectedOutput: `1`,
+            orderIndex: 2,
+          },
+        ],
+      },
+      {
+        stageNumber: 3,
+        title: "Component Inheritance",
+        description: `## Stage 3: Component Inheritance\n\nAdd \`set_prop(node_id, key, value)\` and \`get_prop(node_id, key)\`, plus a \`master_id\` parameter to \`add()\`.\n\n**Figma's component model:** a master component defines default properties. Instances inherit those properties but can override individual ones.\n\n- \`add(..., master_id="btn_master")\` marks the node as an instance of \`btn_master\`.\n- \`set_prop\` stores a property on the node's own props dict (overrides master).\n- \`get_prop\` checks the node's own props first; if not found, checks the master's props; returns \`None\` if not found anywhere.\n\n\`\`\`python\ntree = ComponentTree()\ntree.add(ComponentTree.ROOT, "btn_master", "component")\ntree.set_prop("btn_master", "fill", "blue")\ntree.add(ComponentTree.ROOT, "btn1", "instance", master_id="btn_master")\ntree.set_prop("btn1", "fill", "red")   # override\nprint(tree.get_prop("btn1", "fill"))   # "red"\nprint(tree.get_prop("btn1", "radius")) # None (not set anywhere)\n\`\`\``,
+        baseClass: COMP_BASE_S3,
+        starterCode: COMP_STARTER_S3,
+        solution: COMP_SOL_S3,
+        solutionExplanation: "Each node has a props dict and a master_id. set_prop stores in own props. get_prop checks own props first, then master's props, then returns None.",
+        testCases: [
+          {
+            description: "instance inherits property from master",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "btn_master", "component")\ntree.set_prop("btn_master", "fill", "blue")\ntree.set_prop("btn_master", "radius", 4)\ntree.add(ComponentTree.ROOT, "btn1", "instance", master_id="btn_master")\ntree.set_prop("btn1", "radius", 8)\n_result = tree.get_prop("btn1", "fill")`,
+            expectedOutput: `"blue"`,
+            orderIndex: 0,
+          },
+          {
+            description: "instance own prop overrides master",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "m", "component")\ntree.set_prop("m", "radius", 4)\ntree.add(ComponentTree.ROOT, "i", "instance", master_id="m")\ntree.set_prop("i", "radius", 8)\n_result = tree.get_prop("i", "radius")`,
+            expectedOutput: `8`,
+            orderIndex: 1,
+          },
+          {
+            description: "get_prop returns None for missing property",
+            inputData: `tree = ComponentTree()\ntree.add(ComponentTree.ROOT, "m", "component")\ntree.add(ComponentTree.ROOT, "i", "instance", master_id="m")\n_result = tree.get_prop("i", "missing")`,
+            expectedOutput: `None`,
+            orderIndex: 2,
+          },
+        ],
+      },
+    ]
+  );
+
+  console.log("[Seed] Figma problems seeded.");
 }
 
 /**

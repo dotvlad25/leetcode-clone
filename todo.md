@@ -122,3 +122,20 @@
 - [x] Remove max-h-[500px] cap from solution code block so full solution is visible without inner scroll
 - [x] Fix test_level_N.py indentation: split inputData on real newlines not escaped \\n
 - [x] Fix generateTestFileContent: emit expectedOutput as Python expression (no JSON.stringify wrapping)
+
+## Company Badge System (NEW)
+- [x] Add badges column to problems table (text, nullable, comma-separated)
+- [x] Apply migration 0005 for badges column
+- [x] Update listProblems to return badges field
+- [x] Add CompanyBadges component to Problems.tsx (BADGE_STYLES map: anth=orange, figma=purple)
+- [x] Add CompanyBadges component to ProblemDetail.tsx instructions header
+- [x] Tag all 8 Anthropic problems with badges="anth" in seed-staged.ts
+- [x] Tag all 4 Figma problems with badges="figma" in seed-staged.ts
+- [x] Re-seed all 12 staged problems with updated badges field
+
+## Figma Problems (NEW)
+- [x] Seed Layer Document System (4 stages, figma badge)
+- [x] Seed File System with Permissions (3 stages, figma badge)
+- [x] Seed 2D Canvas Ordering (2 stages, figma badge)
+- [x] Seed Component Tree Traversal (3 stages, figma badge)
+- [x] Verify all 98 reference solution test cases pass (12 problems, all stages)

@@ -69,6 +69,7 @@ export async function listProblems() {
     difficulty: problems.difficulty,
     isStaged: problems.isStaged,
     tags: problems.tags,
+    badges: problems.badges,
     createdAt: problems.createdAt,
   }).from(problems).orderBy(problems.number);
 }
@@ -194,7 +195,8 @@ export async function seedStagedProblemIfNotExists(
     difficulty: "Easy" | "Medium" | "Hard";
     description: string;
     starterCode: string;
-    tags?: string;
+  tags?: string;
+  badges?: string;
     methodName?: string;
   },
   stages: Array<{

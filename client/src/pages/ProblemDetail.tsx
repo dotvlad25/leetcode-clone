@@ -46,6 +46,28 @@ import type { ImperativePanelHandle } from "react-resizable-panels";
 // (ReadOnlyEditor component removed — the right panel now uses a single Monaco instance
 //  that swaps content/readOnly on tab switch, avoiding global font-cache poisoning.)
 
+const BADGE_STYLES: Record<string, { label: string; cls: string }> = {
+  anth: { label: "Anthropic", cls: "border-orange-500/40 text-orange-400 bg-orange-500/10" },
+  figma: { label: "Figma", cls: "border-purple-500/40 text-purple-400 bg-purple-500/10" },
+};
+
+function CompanyBadges({ badges }: { badges?: string | null }) {
+  if (!badges) return null;
+  const list = badges.split(",").map(b => b.trim()).filter(Boolean);
+  return (
+    <>
+      {list.map(b => {
+        const style = BADGE_STYLES[b] ?? { label: b, cls: "border-muted text-muted-foreground bg-muted/20" };
+        return (
+          <span key={b} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${style.cls} leading-none`}>
+            {style.label}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function DifficultyBadge({ difficulty }: { difficulty: string }) {
   const cls =
     difficulty === "Easy" ? "badge-easy" :
@@ -889,6 +911,7 @@ export default function ProblemDetail() {
                           Stage {currentStageNumber}: {currentStage.title}
                         </span>
                         <span className="text-xs text-muted-foreground">(cumulative — all previous stage tests also run)</span>
+                        <CompanyBadges badges={problem.badges} />
                       </div>
                     )}
                     <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{displayDescription}</Streamdown>
