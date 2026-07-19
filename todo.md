@@ -157,3 +157,14 @@
 - [x] Clear All button visible when any filter is active
 - [x] Problem count updates to "X of Y problems" when filters are active
 - [x] Empty state with "Clear filters" link when no results match
+
+## Batch 3 Problems (NEW)
+- [x] Seed Graph Reachability For File Permissions (3 stages, figma badge)
+- [x] Seed Document Editor with Undo/Redo and Batching (3 stages, figma badge)
+- [x] Seed File Deduplication (2 stages, anth badge)
+- [x] Seed In-Memory Banking Service (2 stages, anth badge)
+- [x] Seed In-Memory Key-Value Store with TTL (2 stages, anth badge)
+- [x] Seed Image Processing Pipeline (2 stages, anth badge)
+- [x] Seed Same-Host Web Crawler (2 stages, anth badge)
+- [x] Verify all 49 reference solution tests pass (7 new problems)
+- [x] All 11 vitest tests still pass after batch 3 seeding
