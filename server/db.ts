@@ -71,6 +71,7 @@ export async function listProblems() {
     tags: problems.tags,
     badges: problems.badges,
     createdAt: problems.createdAt,
+    frequency: problems.frequency,
   }).from(problems).orderBy(problems.number);
 }
 
@@ -197,6 +198,7 @@ export async function seedStagedProblemIfNotExists(
     starterCode: string;
   tags?: string;
   badges?: string;
+  frequency?: number;
     methodName?: string;
   },
   stages: Array<{

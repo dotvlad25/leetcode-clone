@@ -905,18 +905,33 @@ export default function ProblemDetail() {
                 </div>
               )}
               <div className="flex-1 overflow-y-auto overflow-x-hidden p-5">
-                {leftTab === "instructions" ? (
-                  <div className="prose prose-sm prose-invert max-w-none">
-                    {isStaged && currentStage && (
-                      <div className="mb-4 flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">
-                          Stage {currentStageNumber}: {currentStage.title}
+               {leftTab === "instructions" ? (
+                 <div className="prose prose-sm prose-invert max-w-none">
+                  {isStaged && currentStage && (
+                    <div className="mb-4 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded">
+                        Stage {currentStageNumber}: {currentStage.title}
+                      </span>
+                      <span className="text-xs text-muted-foreground">(cumulative — all previous stage tests also run)</span>
+                      <CompanyBadges badges={problem.badges} />
+                       {problem.frequency != null && (
+                         <span className="text-xs text-muted-foreground/60 ml-auto" title="Number of times reported in interviews">
+                           {problem.frequency.toLocaleString()} reports
+                         </span>
+                       )}
+                    </div>
+                  )}
+                  {(!isStaged || !currentStage) && (problem.badges || problem.frequency != null) && (
+                    <div className="mb-4 flex items-center gap-2 flex-wrap">
+                      <CompanyBadges badges={problem.badges} />
+                      {problem.frequency != null && (
+                        <span className="text-xs text-muted-foreground/60 ml-auto" title="Number of times reported in interviews">
+                          {problem.frequency.toLocaleString()} reports
                         </span>
-                        <span className="text-xs text-muted-foreground">(cumulative — all previous stage tests also run)</span>
-                        <CompanyBadges badges={problem.badges} />
-                      </div>
-                    )}
-                    <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{displayDescription}</Streamdown>
+                      )}
+                    </div>
+                  )}
+                   <Streamdown shikiTheme={["github-dark-default", "github-dark-default"]}>{displayDescription}</Streamdown>
                   </div>
                 ) : (
                   <div className="space-y-6">

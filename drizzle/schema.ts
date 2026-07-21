@@ -30,6 +30,7 @@ export const problems = mysqlTable("problems", {
   methodName: varchar("methodName", { length: 64 }).default("findDuplicate").notNull(),
   tags: text("tags"),
   badges: text("badges"),
+  frequency: int("frequency"),
   isStaged: int("isStaged").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

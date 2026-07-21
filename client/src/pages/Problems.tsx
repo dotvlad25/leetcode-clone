@@ -227,19 +227,21 @@ export default function Problems() {
 
           {/* ── Table ──────────────────────────────────────────────────── */}
           <div className="rounded-lg border border-border overflow-hidden">
-            <div className="grid grid-cols-[2rem_1fr_7rem_7rem] gap-4 px-5 py-3 bg-secondary/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="grid grid-cols-[2rem_1fr_7rem_6rem_7rem] gap-4 px-5 py-3 bg-secondary/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wider">
               <div>Status</div>
               <div>Title</div>
               <div>Difficulty</div>
+              <div className="text-right">Frequency</div>
               <div className="text-right">Progress</div>
             </div>
 
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[2rem_1fr_7rem_7rem] gap-4 px-5 py-4 border-b border-border last:border-0">
+                <div key={i} className="grid grid-cols-[2rem_1fr_7rem_6rem_7rem] gap-4 px-5 py-4 border-b border-border last:border-0">
                   <Skeleton className="h-4 w-4 rounded-full" />
                   <Skeleton className="h-4 w-48" />
                   <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-10 ml-auto" />
                   <Skeleton className="h-4 w-12 ml-auto" />
                 </div>
               ))
@@ -259,7 +261,7 @@ export default function Problems() {
             ) : (
               filtered.map((p, idx) => (
                 <Link key={p.id} href={`/problems/${p.slug}`}>
-                  <div className="grid grid-cols-[2rem_1fr_7rem_7rem] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-secondary/30 cursor-pointer transition-colors group">
+                  <div className="grid grid-cols-[2rem_1fr_7rem_6rem_7rem] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-secondary/30 cursor-pointer transition-colors group">
                     <div className="flex items-center">
                       {p.solved ? (
                         <CheckCircle2 className="w-4 h-4 text-primary" />
@@ -281,6 +283,13 @@ export default function Problems() {
                     </div>
                     <div className="flex items-center">
                       <DifficultyBadge difficulty={p.difficulty} />
+                    </div>
+                    <div className="flex items-center justify-end text-xs tabular-nums text-muted-foreground/70">
+                      {p.frequency != null ? (
+                        <span title="Number of times reported in interviews">{p.frequency.toLocaleString()}</span>
+                      ) : (
+                        <span className="text-muted-foreground/30">N/A</span>
+                      )}
                     </div>
                     <div className="flex items-center justify-end text-sm text-muted-foreground">
                       {p.isStaged && p.stageProgress ? (

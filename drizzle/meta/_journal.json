@@ -43,6 +43,13 @@
       "when": 1784326980272,
       "tag": "0005_spotty_xorn",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1784599256358,
+      "tag": "0006_spotty_gorilla_man",
+      "breakpoints": true
     }
   ]
 }

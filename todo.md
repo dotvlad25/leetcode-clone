@@ -187,3 +187,31 @@
 - [x] Verify all 43 Microsoft reference solution tests pass
 - [x] Wire batch4 and batch5 into seed-staged.ts runStagedSeed
 - [x] All 11 vitest tests pass after batch 4+5 seeding
+
+## Frequency / Appearance Count (NEW)
+- [x] Add frequency column (INT, nullable) to problems table in DB
+- [x] Update listProblems and getBySlug to return frequency field
+- [x] Update seedStagedProblemIfNotExists to accept optional frequency field
+- [x] Backfill frequency for all Google problems (from scrape: 30001=1393, 30002=1224, 30003=444, 30004=195, 30005=157)
+- [x] Backfill frequency for all Microsoft problems (from scrape: 40001=2210, 40002=271, 40003=223, 40004=122, 40005=107)
+- [x] Leave frequency=NULL for all pre-existing non-scraped problems
+- [x] Show frequency column on Problems list (numeric, N/A for unscraped)
+- [x] Show frequency in ProblemDetail header (staged and non-staged)
+
+## Batch 6 — More Google Problems (NEW)
+- [x] Seed Min Deletions to Avoid Overlap (2 stages, google badge, freq=1393)
+- [x] Seed Check If All Substrings Are Dictionary Words (2 stages, google badge, freq=1224)
+- [x] Seed Next-Word Frequency Predictor (2 stages, google badge, freq=444)
+- [x] Seed Detect and Remove Matched Words in Char Stream (2 stages, google badge, freq=195)
+- [x] Seed Compute Minimax Grid Path (2 stages, google badge, freq=157)
+
+## Batch 7 — More Microsoft Problems (NEW)
+- [x] Seed Stream Output Until Stop Token (2 stages, microsoft badge, freq=141)
+- [x] Seed Validate a JSON-like String (2 stages, microsoft badge, freq=131)
+- [x] Seed Return Top K Relevant Apps (2 stages, microsoft badge, freq=105)
+- [x] Seed Rotate a Grid by 180 Degrees (2 stages, microsoft badge, freq=105)
+- [x] Seed Graph Grid and Array Tasks (2 stages, microsoft badge, freq=204)
+
+## Batch 8 — Figma Problems (NEW)
+- [x] Scrape Figma problems from prachub (async-job-scheduler, validate-ipv4, document-layer-undo-redo, trending-files, realtime-collaborative-comments)
+- [x] Seed 5 Figma problems with figma badge and frequency counts
