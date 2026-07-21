@@ -5,6 +5,7 @@ import { seedBatch5Problems } from "./seed-batch5";
 import { seedBatch6Problems } from "./seed-batch6";
 import { seedBatch7Problems } from "./seed-batch7";
 import { seedBatch8Problems } from "./seed-batch8";
+import { seedBatch9Problems } from "./seed-batch9";
 import { getDb } from "./db";
 import { problemStages, problems } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
@@ -2669,6 +2670,7 @@ export async function runStagedSeed() {
   await seedBatch6Problems();
   await seedBatch7Problems();
   await seedBatch8Problems();
+  await seedBatch9Problems();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
