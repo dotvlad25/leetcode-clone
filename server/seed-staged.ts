@@ -1,5 +1,7 @@
 import { seedStagedProblemIfNotExists } from "./db";
 import { seedBatch3Problems } from "./seed-batch3";
+import { seedBatch4Problems } from "./seed-batch4";
+import { seedBatch5Problems } from "./seed-batch5";
 import { getDb } from "./db";
 import { problemStages, problems } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
@@ -2659,6 +2661,8 @@ export async function runStagedSeed() {
   // ── Figma problems ──────────────────────────────────────────────────────────
   await seedFigmaProblems();
   await seedBatch3Problems();
+  await seedBatch4Problems();
+  await seedBatch5Problems();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

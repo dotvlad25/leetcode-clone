@@ -168,3 +168,22 @@
 - [x] Seed Same-Host Web Crawler (2 stages, anth badge)
 - [x] Verify all 49 reference solution tests pass (7 new problems)
 - [x] All 11 vitest tests still pass after batch 3 seeding
+
+## Batch 4 Problems — Google (NEW)
+- [x] Add google (blue) and microsoft/msft (cyan) badge styles to Problems.tsx and ProblemDetail.tsx
+- [x] Seed Meeting Rooms Scheduler (2 stages, google badge) — heap, greedy, intervals
+- [x] Seed Restaurant Waitlist System (2 stages, google badge) — queue, design
+- [x] Seed Network Connectivity Tracker (2 stages, google badge) — union-find, graph
+- [x] Seed String Compression Decoder (2 stages, google badge) — stack, string
+- [x] Seed Time-Based Key-Value Store (2 stages, google badge) — binary-search, design
+- [x] Verify all 50 Google reference solution tests pass
+
+## Batch 5 Problems — Microsoft (NEW)
+- [x] Seed Interval Room Counter and Token Manager (2 stages, microsoft badge) — sweep-line, design
+- [x] Seed Snapshot Set Iterator (2 stages, microsoft badge) — hash-set, snapshot
+- [x] Seed DNA Fragment Assembler (2 stages, microsoft badge) — greedy, string
+- [x] Seed Greedy Beam Search Decoder (2 stages, microsoft badge) — dp, nlp
+- [x] Seed Task Scheduler with Dependencies (2 stages, microsoft badge) — topological-sort, graph
+- [x] Verify all 43 Microsoft reference solution tests pass
+- [x] Wire batch4 and batch5 into seed-staged.ts runStagedSeed
+- [x] All 11 vitest tests pass after batch 4+5 seeding

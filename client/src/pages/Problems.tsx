@@ -11,6 +11,8 @@ import { useAuth } from "@/_core/hooks/useAuth";
 const BADGE_STYLES: Record<string, { label: string; cls: string; activeCls: string }> = {
   anth:  { label: "Anthropic", cls: "border-orange-500/40 text-orange-400 bg-orange-500/10",  activeCls: "border-orange-500 text-orange-300 bg-orange-500/25" },
   figma: { label: "Figma",     cls: "border-purple-500/40 text-purple-400 bg-purple-500/10", activeCls: "border-purple-500 text-purple-300 bg-purple-500/25" },
+  google: { label: "Google",   cls: "border-blue-500/40 text-blue-400 bg-blue-500/10",        activeCls: "border-blue-500 text-blue-300 bg-blue-500/25" },
+  msft:  { label: "Microsoft", cls: "border-cyan-500/40 text-cyan-400 bg-cyan-500/10",        activeCls: "border-cyan-500 text-cyan-300 bg-cyan-500/25" },
 };
 
 const DIFFICULTY_STYLES: Record<string, { cls: string; activeCls: string }> = {
