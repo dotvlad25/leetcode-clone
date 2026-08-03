@@ -1,15 +1,17 @@
 import { defineConfig } from "drizzle-kit";
+import path from "node:path";
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required to run drizzle commands");
-}
+// Local SQLite file. Matches server/_core/env.ts — override with DATABASE_URL.
+const dbFile = path.resolve(
+  process.cwd(),
+  (process.env.DATABASE_URL ?? "./data/app.db").replace(/^(file:|sqlite:)\/{0,2}/, "")
+);
 
 export default defineConfig({
   schema: "./drizzle/schema.ts",
-  out: "./drizzle",
-  dialect: "mysql",
+  out: "./drizzle/migrations",
+  dialect: "sqlite",
   dbCredentials: {
-    url: connectionString,
+    url: dbFile,
   },
 });

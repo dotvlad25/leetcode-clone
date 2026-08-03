@@ -1,11 +1,6 @@
-import mysql from "mysql2/promise";
-import * as dotenv from "dotenv";
-dotenv.config();
-
-const DB_URL = process.env.DATABASE_URL;
-if (!DB_URL) { console.error("DATABASE_URL not set"); process.exit(1); }
-
-const conn = await mysql.createConnection(DB_URL);
+import { eq } from "drizzle-orm";
+import { problems } from "../drizzle/schema";
+import { getDb } from "./db";
 
 // ─── Solutions ────────────────────────────────────────────────────────────────
 
@@ -374,18 +369,22 @@ This is a clean one-liner that demonstrates comfort with circular indexing. If a
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
 
-for (const { slug, solution, solutionExplanation } of solutions) {
-  const [rows] = await conn.execute("SELECT id FROM problems WHERE slug = ?", [slug]);
-  if (!rows.length) {
-    console.warn(`⚠️  Problem not found: ${slug}`);
-    continue;
-  }
-  await conn.execute(
-    "UPDATE problems SET solution = ?, solutionExplanation = ? WHERE slug = ?",
-    [solution, solutionExplanation, slug]
-  );
-  console.log(`✅ Seeded solution for ${slug}`);
-}
+/** Backfills reference solutions onto already-seeded problems. Idempotent. */
+export async function runSolutionsSeed(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
 
-await conn.end();
-console.log("\n🎉 All solutions seeded!");
+  for (const { slug, solution, solutionExplanation } of solutions) {
+    const rows = await db
+      .select({ id: problems.id })
+      .from(problems)
+      .where(eq(problems.slug, slug))
+      .limit(1);
+    if (rows.length === 0) continue;
+
+    await db
+      .update(problems)
+      .set({ solution, solutionExplanation })
+      .where(eq(problems.slug, slug));
+  }
+}

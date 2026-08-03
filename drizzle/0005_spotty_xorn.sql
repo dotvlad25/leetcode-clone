@@ -1,1 +1,0 @@
-ALTER TABLE `problems` ADD `badges` text;

@@ -1,11 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
-import { Code2, LogOut, User } from "lucide-react";
+import { Code2, User } from "lucide-react";
 
 export default function NavBar() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user } = useAuth();
   const [location] = useLocation();
 
   return (
@@ -30,23 +29,10 @@ export default function NavBar() {
           </Link>
         </div>
 
-        {/* Auth */}
-        <div className="flex items-center gap-2">
-          {isAuthenticated ? (
-            <>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <User className="w-4 h-4" />
-                <span className="hidden sm:inline">{user?.name ?? "User"}</span>
-              </div>
-              <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" onClick={() => startLogin()} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Sign In
-            </Button>
-          )}
+        {/* Local user — running locally there is no sign-in step */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <User className="w-4 h-4" />
+          <span className="hidden sm:inline">{user?.name ?? "Local User"}</span>
         </div>
       </div>
     </nav>

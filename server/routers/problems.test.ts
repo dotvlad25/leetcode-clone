@@ -4,20 +4,15 @@ import type { TrpcContext } from "../_core/context";
 
 // Mock the LLM invocation
 vi.mock("../_core/llm", () => ({
-  invokeLLM: vi.fn().mockResolvedValue({
-    choices: [{
-      message: {
-        content: JSON.stringify({
-          overall: "The solution uses a hash map approach which is efficient.",
-          correctness: { score: 9, feedback: "Correctly handles all edge cases." },
-          timeComplexity: { notation: "O(n)", explanation: "Single pass through all files." },
-          spaceComplexity: { notation: "O(n)", explanation: "Stores all file paths in the map." },
-          styleIssues: [],
-          improvements: ["Consider using type hints more explicitly."],
-          optimizedApproach: "Hash map grouping by content is already optimal.",
-        }),
-      },
-    }],
+  isLLMConfigured: vi.fn().mockReturnValue(true),
+  invokeStructuredLLM: vi.fn().mockResolvedValue({
+    overall: "The solution uses a hash map approach which is efficient.",
+    correctness: { score: 9, feedback: "Correctly handles all edge cases." },
+    timeComplexity: { notation: "O(n)", explanation: "Single pass through all files." },
+    spaceComplexity: { notation: "O(n)", explanation: "Stores all file paths in the map." },
+    styleIssues: [],
+    improvements: ["Consider using type hints more explicitly."],
+    optimizedApproach: "Hash map grouping by content is already optimal.",
   }),
 }));
 

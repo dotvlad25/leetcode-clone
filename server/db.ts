@@ -1,5 +1,9 @@
+import Database from "better-sqlite3";
 import { eq, desc, and, inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import fs from "node:fs";
+import path from "node:path";
 import {
   InsertUser, users, problems, testCases, submissions, InsertSubmission,
   problemStages, stageTestCases, InsertProblemStage, InsertStageTestCase,
@@ -7,16 +11,29 @@ import {
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
-let _db: ReturnType<typeof drizzle> | null = null;
+type Db = ReturnType<typeof drizzle>;
 
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+let _db: Db | null = null;
+
+/**
+ * Opens (and on first call, creates + migrates) the local SQLite database.
+ * The file lives at ENV.databaseFile — ./data/app.db by default — so a fresh
+ * clone needs no database server at all.
+ */
+export async function getDb(): Promise<Db | null> {
+  if (_db) return _db;
+  try {
+    const file = ENV.databaseFile;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const sqlite = new Database(file);
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
+    const db = drizzle(sqlite);
+    migrate(db, { migrationsFolder: ENV.migrationsDir });
+    _db = db;
+  } catch (error) {
+    console.error("[Database] Failed to open local SQLite database:", error);
+    _db = null;
   }
   return _db;
 }
@@ -42,11 +59,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   textFields.forEach(assignNullable);
   if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
   if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
-  else if (user.openId === ENV.ownerOpenId) { values.role = 'admin'; updateSet.role = 'admin'; }
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
-  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+  await db.insert(users).values(values)
+    .onConflictDoUpdate({ target: users.openId, set: updateSet });
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -179,7 +196,7 @@ export async function seedProblemIfNotExists(
   if (!db) return;
   const existing = await getProblemBySlug(problemData.slug);
   if (existing) return;
-  const [result] = await db.insert(problems).values(problemData).$returningId();
+  const [result] = await db.insert(problems).values(problemData).returning({ id: problems.id });
   const problemId = result.id;
   if (cases.length > 0) {
     await db.insert(testCases).values(cases.map(c => ({ ...c, problemId })));
@@ -220,7 +237,7 @@ export async function seedStagedProblemIfNotExists(
   const [result] = await db.insert(problems).values({
     ...problemData,
     isStaged: 1,
-  }).$returningId();
+  }).returning({ id: problems.id });
   const problemId = result.id;
   for (const stage of stages) {
     const [stageResult] = await db.insert(problemStages).values({
@@ -233,7 +250,7 @@ export async function seedStagedProblemIfNotExists(
       solution: stage.solution ?? null,
       solutionExplanation: stage.solutionExplanation ?? null,
       testFileContent: stage.testFileContent ?? null,
-    }).$returningId();
+    }).returning({ id: problemStages.id });
     const stageId = stageResult.id;
     if (stage.testCases.length > 0) {
       await db.insert(stageTestCases).values(

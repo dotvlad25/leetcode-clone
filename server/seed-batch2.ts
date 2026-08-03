@@ -1,5 +1,6 @@
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
+import { and, eq } from "drizzle-orm";
+import { problems, testCases } from "../drizzle/schema";
+import { getDb } from "./db";
 
 const PROBLEMS = [
   {
@@ -324,47 +325,47 @@ class Solution:
   },
 ];
 
-async function main() {
-  const conn = await mysql.createConnection(process.env.DATABASE_URL!);
+/** Upserts the batch-2 problems and replaces their test cases. Idempotent. */
+export async function runBatch2Seed(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
 
   for (const p of PROBLEMS) {
-    // Upsert problem
-    const [existing] = await conn.execute(
-      "SELECT id FROM problems WHERE slug = ?",
-      [p.slug]
-    ) as any;
+    const existing = await db
+      .select({ id: problems.id })
+      .from(problems)
+      .where(eq(problems.slug, p.slug))
+      .limit(1);
+
+    const values = {
+      number: p.number,
+      title: p.title,
+      slug: p.slug,
+      difficulty: p.difficulty as "Easy" | "Medium" | "Hard",
+      description: p.description,
+      starterCode: p.starterCode,
+      methodName: p.methodName,
+    };
 
     let problemId: number;
-    if ((existing as any[]).length > 0) {
-      problemId = (existing as any[])[0].id;
-      await conn.execute(
-        "UPDATE problems SET title=?, difficulty=?, description=?, starterCode=?, methodName=?, number=? WHERE id=?",
-        [p.title, p.difficulty, p.description, p.starterCode, p.methodName, p.number, problemId]
-      );
-      console.log(`Updated problem ${p.number}: ${p.title}`);
+    if (existing.length > 0) {
+      problemId = existing[0].id;
+      await db.update(problems).set(values).where(eq(problems.id, problemId));
     } else {
-      const [result] = await conn.execute(
-        "INSERT INTO problems (number, title, slug, difficulty, description, starterCode, methodName) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [p.number, p.title, p.slug, p.difficulty, p.description, p.starterCode, p.methodName]
-      ) as any;
-      problemId = (result as any).insertId;
-      console.log(`Inserted problem ${p.number}: ${p.title} (id=${problemId})`);
+      const [inserted] = await db.insert(problems).values(values).returning({ id: problems.id });
+      problemId = inserted.id;
+      console.log(`[Seed] Seeded problem ${p.number}: ${p.title}`);
     }
 
-    // Delete existing test cases and re-insert
-    await conn.execute("DELETE FROM test_cases WHERE problemId = ?", [problemId]);
-    for (let i = 0; i < p.testCases.length; i++) {
-      const tc = p.testCases[i];
-      await conn.execute(
-        "INSERT INTO test_cases (problemId, description, inputData, expectedOutput, orderIndex) VALUES (?, ?, ?, ?, ?)",
-        [problemId, tc.description, tc.input, tc.expectedOutput, i]
-      );
-    }
-    console.log(`  → ${p.testCases.length} test cases seeded`);
+    await db.delete(testCases).where(eq(testCases.problemId, problemId));
+    await db.insert(testCases).values(
+      p.testCases.map((tc, i) => ({
+        problemId,
+        description: tc.description,
+        inputData: tc.input,
+        expectedOutput: tc.expectedOutput,
+        orderIndex: i,
+      }))
+    );
   }
-
-  await conn.end();
-  console.log("Done!");
 }
-
-main().catch(console.error);

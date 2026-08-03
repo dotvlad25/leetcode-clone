@@ -20,7 +20,51 @@ import {
 } from "../db";
 import { getAcceptedCodePerStage } from "../db";
 import { executePython, buildGenericTestScript, buildUnitTestCode, buildStagedTestScript, TestCaseResult } from "../executor";
-import { invokeLLM } from "../_core/llm";
+import { invokeStructuredLLM, isLLMConfigured } from "../_core/llm";
+
+// JSON Schema for the AI code review response. Shared by both LLM providers,
+// so `additionalProperties: false` + full `required` lists are mandatory
+// (OpenAI strict mode rejects schemas without them).
+const CODE_ANALYSIS_SCHEMA = {
+  type: "object",
+  properties: {
+    overall: { type: "string" },
+    correctness: {
+      type: "object",
+      properties: {
+        score: { type: "number" },
+        feedback: { type: "string" },
+      },
+      required: ["score", "feedback"],
+      additionalProperties: false,
+    },
+    timeComplexity: {
+      type: "object",
+      properties: {
+        notation: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["notation", "explanation"],
+      additionalProperties: false,
+    },
+    spaceComplexity: {
+      type: "object",
+      properties: {
+        notation: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["notation", "explanation"],
+      additionalProperties: false,
+    },
+    styleIssues: { type: "array", items: { type: "string" } },
+    improvements: { type: "array", items: { type: "string" } },
+    optimizedApproach: { type: "string" },
+    nextMethodHint: { type: "string" },
+    baseClassUsage: { type: "string" },
+  },
+  required: ["overall", "correctness", "timeComplexity", "spaceComplexity", "styleIssues", "improvements", "optimizedApproach", "nextMethodHint", "baseClassUsage"],
+  additionalProperties: false,
+} as const;
 
 // ── Stderr formatter ─────────────────────────────────────────────────────────
 // User print() calls are redirected to stderr by the test harness.
@@ -254,7 +298,9 @@ export const problemsRouter = router({
         }
       }
 
-      const allPassed = results.every((r) => r.passed);
+      // `[].every(...)` is true, so a problem with no test cases would accept
+      // any code — including an empty submission. Require at least one test.
+      const allPassed = results.length > 0 && results.every((r) => r.passed);
       const status = allPassed ? "accepted" : "wrong_answer";
       const passed = results.filter((r) => r.passed).length;
       const total = results.length;
@@ -342,64 +388,17 @@ ${input.code}
 
 Provide a thorough code review.`;
 
-      const response = await invokeLLM({
-        model: "gpt-5-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "code_analysis",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                overall: { type: "string" },
-                correctness: {
-                  type: "object",
-                  properties: {
-                    score: { type: "number" },
-                    feedback: { type: "string" },
-                  },
-                  required: ["score", "feedback"],
-                  additionalProperties: false,
-                },
-                timeComplexity: {
-                  type: "object",
-                  properties: {
-                    notation: { type: "string" },
-                    explanation: { type: "string" },
-                  },
-                  required: ["notation", "explanation"],
-                  additionalProperties: false,
-                },
-                spaceComplexity: {
-                  type: "object",
-                  properties: {
-                    notation: { type: "string" },
-                    explanation: { type: "string" },
-                  },
-                  required: ["notation", "explanation"],
-                  additionalProperties: false,
-                },
-                styleIssues: { type: "array", items: { type: "string" } },
-                improvements: { type: "array", items: { type: "string" } },
-                optimizedApproach: { type: "string" },
-                nextMethodHint: { type: "string" },
-                baseClassUsage: { type: "string" },
-              },
-              required: ["overall", "correctness", "timeComplexity", "spaceComplexity", "styleIssues", "improvements", "optimizedApproach", "nextMethodHint", "baseClassUsage"],
-              additionalProperties: false,
-            },
-          },
-        },
+      return invokeStructuredLLM({
+        system: systemPrompt,
+        user: userPrompt,
+        schemaName: "code_analysis",
+        schema: CODE_ANALYSIS_SCHEMA as unknown as Record<string, unknown>,
       });
-
-      const content = response.choices[0].message.content;
-      return JSON.parse(content as string);
     }),
+
+  // Whether the AI review feature has an API key configured. The client uses
+  // this to explain the disabled Analyze button instead of failing on click.
+  aiReviewAvailable: publicProcedure.query(() => ({ available: isLLMConfigured() })),
 
 
   // Get test cases for a specific stage (for the read-only test viewer)
@@ -592,7 +591,8 @@ Provide a thorough code review.`;
         }
       }
 
-      const allPassed = results.every(r => r.passed);
+      // See submit(): an empty test list must never count as a pass.
+      const allPassed = results.length > 0 && results.every(r => r.passed);
       const status = allPassed ? "accepted" : "wrong_answer";
       const passed = results.filter(r => r.passed).length;
       const total = results.length;

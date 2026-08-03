@@ -3,12 +3,13 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { runSeed } from "../seed";
+import { runBatch2Seed } from "../seed-batch2";
+import { runSolutionsSeed } from "../seed-solutions";
+import { runStagedSeed } from "../seed-staged";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,8 +36,6 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  registerStorageProxy(app);
-  registerOAuthRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",
@@ -52,6 +51,13 @@ async function startServer() {
     serveStatic(app);
   }
 
+  // Open + migrate the SQLite database and load the problem set before we
+  // start serving, so the first page view never sees an empty list.
+  await runSeed();
+  await runBatch2Seed();
+  await runStagedSeed();
+  await runSolutionsSeed();
+
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
 
@@ -62,11 +68,9 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
-
-  // Seed database with initial problems
-  runSeed().catch(console.error);
 }
 
-startServer().catch(console.error);
-import { runStagedSeed } from "../seed-staged";
-  runStagedSeed().catch(console.error);
+startServer().catch(error => {
+  console.error("[Server] Failed to start:", error);
+  process.exit(1);
+});

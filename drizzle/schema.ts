@@ -1,93 +1,95 @@
-import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 /**
- * Core user table backing auth flow.
+ * Core user table. Locally there is a single auto-provisioned user
+ * (see server/_core/localUser.ts), but the table stays multi-user so
+ * submissions and stage progress keep a real owner.
  */
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  openId: text("openId").notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  email: text("email"),
+  loginMethod: text("loginMethod"),
+  role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).$onUpdateFn(() => new Date()).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
-export const problems = mysqlTable("problems", {
-  id: int("id").autoincrement().primaryKey(),
-  number: int("number").notNull().default(0),
-  slug: varchar("slug", { length: 128 }).notNull().unique(),
+export const problems = sqliteTable("problems", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  number: integer("number").notNull().default(0),
+  slug: text("slug").notNull().unique(),
   title: text("title").notNull(),
-  difficulty: mysqlEnum("difficulty", ["Easy", "Medium", "Hard"]).notNull(),
+  difficulty: text("difficulty", { enum: ["Easy", "Medium", "Hard"] }).notNull(),
   description: text("description").notNull(),
   starterCode: text("starterCode").notNull(),
   solution: text("solution"),
   solutionExplanation: text("solutionExplanation"),
   solutionVariants: text("solutionVariants"),
-  methodName: varchar("methodName", { length: 64 }).default("findDuplicate").notNull(),
+  methodName: text("methodName").default("findDuplicate").notNull(),
   tags: text("tags"),
   badges: text("badges"),
-  frequency: int("frequency"),
-  isStaged: int("isStaged").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  frequency: integer("frequency"),
+  isStaged: integer("isStaged").default(0).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
-export const problemStages = mysqlTable("problem_stages", {
-  id: int("id").autoincrement().primaryKey(),
-  problemId: int("problemId").notNull(),
-  stageNumber: int("stageNumber").notNull(),
-  title: varchar("title", { length: 256 }).notNull(),
+export const problemStages = sqliteTable("problem_stages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  problemId: integer("problemId").notNull(),
+  stageNumber: integer("stageNumber").notNull(),
+  title: text("title").notNull(),
   description: text("description").notNull(),
   baseClass: text("baseClass").notNull(),
   starterCode: text("starterCode").notNull(),
   solution: text("solution"),
   solutionExplanation: text("solutionExplanation"),
   testFileContent: text("testFileContent"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
-export const stageTestCases = mysqlTable("stage_test_cases", {
-  id: int("id").autoincrement().primaryKey(),
-  stageId: int("stageId").notNull(),
-  problemId: int("problemId").notNull(),
-  description: varchar("description", { length: 512 }).notNull(),
+export const stageTestCases = sqliteTable("stage_test_cases", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  stageId: integer("stageId").notNull(),
+  problemId: integer("problemId").notNull(),
+  description: text("description").notNull(),
   inputData: text("inputData").notNull(),
   expectedOutput: text("expectedOutput").notNull(),
-  orderIndex: int("orderIndex").notNull().default(0),
+  orderIndex: integer("orderIndex").notNull().default(0),
 });
 
-export const testCases = mysqlTable("test_cases", {
-  id: int("id").autoincrement().primaryKey(),
-  problemId: int("problemId").notNull(),
-  description: varchar("description", { length: 512 }).notNull(),
+export const testCases = sqliteTable("test_cases", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  problemId: integer("problemId").notNull(),
+  description: text("description").notNull(),
   inputData: text("inputData").notNull(),
   expectedOutput: text("expectedOutput").notNull(),
-  orderIndex: int("orderIndex").notNull().default(0),
+  orderIndex: integer("orderIndex").notNull().default(0),
 });
 
-export const submissions = mysqlTable("submissions", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  problemId: int("problemId").notNull(),
+export const submissions = sqliteTable("submissions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  problemId: integer("problemId").notNull(),
   code: text("code").notNull(),
-  status: mysqlEnum("status", ["accepted", "wrong_answer", "error", "run"]).notNull(),
+  status: text("status", { enum: ["accepted", "wrong_answer", "error", "run"] }).notNull(),
   testResults: text("testResults").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
-export const stageSubmissions = mysqlTable("stage_submissions", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  problemId: int("problemId").notNull(),
-  stageId: int("stageId").notNull(),
-  stageNumber: int("stageNumber").notNull(),
+export const stageSubmissions = sqliteTable("stage_submissions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  problemId: integer("problemId").notNull(),
+  stageId: integer("stageId").notNull(),
+  stageNumber: integer("stageNumber").notNull(),
   code: text("code").notNull(),
-  status: mysqlEnum("status", ["accepted", "wrong_answer", "error"]).notNull(),
+  status: text("status", { enum: ["accepted", "wrong_answer", "error"] }).notNull(),
   testResults: text("testResults").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type User = typeof users.$inferSelect;

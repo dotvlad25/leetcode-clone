@@ -3,7 +3,6 @@ import { useParams, Link } from "wouter";
 import Editor from "@monaco-editor/react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -210,7 +209,19 @@ function TestResultPanel({ results, status }: { results: TestResult[]; status: s
 }
 
 // ── AI Analysis Panel ──────────────────────────────────────────────────────────
-function AIAnalysisPanel({ analysis, isLoading }: { analysis: AIAnalysis | null; isLoading: boolean }) {
+function AIAnalysisPanel({ analysis, isLoading, available = true }: { analysis: AIAnalysis | null; isLoading: boolean; available?: boolean }) {
+  if (!available && !analysis && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-16 px-6 text-center">
+        <Brain className="w-10 h-10 opacity-30" />
+        <p className="text-sm">AI review is not configured</p>
+        <p className="text-xs">
+          Add <code className="text-foreground">ANTHROPIC_API_KEY</code> or{" "}
+          <code className="text-foreground">OPENAI_API_KEY</code> to your <code className="text-foreground">.env</code> file and restart the server.
+        </p>
+      </div>
+    );
+  }
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-muted-foreground">
@@ -319,16 +330,7 @@ function SubmissionHistoryPanel({ slug, isStaged }: { slug: string; isStaged: bo
   );
   const history = isStaged ? stageHistory : genericHistory;
   const isLoading = isStaged ? stageLoading : genericLoading;
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-16">
-        <History className="w-10 h-10 opacity-30" />
-        <p className="text-sm">Sign in to view your submission history</p>
-        <Button size="sm" onClick={() => startLogin()}>Sign In</Button>
-      </div>
-    );
-  }
-  if (isLoading) {
+  if (isLoading || !isAuthenticated) {
     return (
       <div className="p-4 space-y-3">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -731,6 +733,12 @@ export default function ProblemDetail() {
     },
   });
 
+  // Whether the server has an LLM API key — drives the AI panel's empty state
+  // so a missing key is explained before the user clicks Analyze.
+  const { data: aiAvailability } = trpc.problems.aiReviewAvailable.useQuery(undefined, {
+    staleTime: Infinity,
+  });
+
   const currentCode = code || problem?.starterCode || "";
   const isRunning = runMutation.isPending || submitMutation.isPending || runStageMutation.isPending || submitStageMutation.isPending;
   const isAnalyzing = analyzeMutation.isPending;
@@ -765,7 +773,6 @@ export default function ProblemDetail() {
   };
 
   const handleSubmit = () => {
-    if (!isAuthenticated) { startLogin(); return; }
     if (!currentCode.trim()) return toast.error("Write some code first!");
     setTerminalOutput("");
     if (isStaged) {
@@ -778,6 +785,9 @@ export default function ProblemDetail() {
 
   const handleAnalyze = () => {
     if (!currentCode.trim()) return toast.error("Write some code first!");
+    if (aiAvailability && !aiAvailability.available) {
+      return toast.error("AI review is not configured — add ANTHROPIC_API_KEY or OPENAI_API_KEY to your .env file.");
+    }
     setActiveBottomTab("ai");
     analyzeMutation.mutate({
       slug,
@@ -1249,7 +1259,7 @@ export default function ProblemDetail() {
                     </TabsContent>
                     <TabsContent value="ai" className="h-full m-0 overflow-hidden">
                       <div className="h-full overflow-y-auto overflow-x-hidden">
-                        <AIAnalysisPanel analysis={aiAnalysis} isLoading={isAnalyzing} />
+                        <AIAnalysisPanel analysis={aiAnalysis} isLoading={isAnalyzing} available={aiAvailability?.available ?? true} />
                       </div>
                     </TabsContent>
                     <TabsContent value="history" className="h-full m-0 overflow-hidden">
