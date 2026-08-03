@@ -76,29 +76,34 @@ sp.get_output()         # → ["hello", "world"]
         return self.buffer[:]`,
         solution: `class TokenStreamProcessor:
     def __init__(self, stop_tokens: list[str]):
+        # Set membership keeps the per-token check O(1).
         self.stop_tokens = set(stop_tokens)
         self.buffer = []
         self.stopped = False
 
     def add_token(self, token: str) -> bool:
+        # Once stopped the stream is latched: later tokens are dropped
+        # rather than appended, which is what "stop" has to mean.
         if self.stopped:
             return False
         if token in self.stop_tokens:
             self.stopped = True
+            # The stop token itself is never emitted.
             return True
         self.buffer.append(token)
         return False
 
     def get_output(self) -> list[str]:
+        # Copy so callers cannot mutate the internal buffer.
         return self.buffer[:]`,
         solutionExplanation: `A simple state machine with two states: running and stopped. The \`stopped\` flag gates all further processing. Using a \`set\` for stop tokens gives O(1) lookup.
 
 This pattern is used in LLM inference engines (e.g., vLLM, TGI) to detect end-of-sequence tokens and halt generation.`,
         testCases: [
-          { description: "stop triggered", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"hello\"); sp.add_token(\"world\")\nresult = sp.add_token(\"<stop>\")", expectedOutput: "True", orderIndex: 0 },
-          { description: "output before stop", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"hello\"); sp.add_token(\"world\"); sp.add_token(\"<stop>\")\nresult = sp.get_output()", expectedOutput: "['hello', 'world']", orderIndex: 1 },
-          { description: "token after stop ignored", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"a\"); sp.add_token(\"<stop>\"); sp.add_token(\"b\")\nresult = sp.get_output()", expectedOutput: "['a']", orderIndex: 2 },
-          { description: "no stop", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"a\"); sp.add_token(\"b\")\nresult = sp.get_output()", expectedOutput: "['a', 'b']", orderIndex: 3 },
+          { description: "stop triggered", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"hello\"); sp.add_token(\"world\")\n_result = sp.add_token(\"<stop>\")", expectedOutput: "True", orderIndex: 0 },
+          { description: "output before stop", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"hello\"); sp.add_token(\"world\"); sp.add_token(\"<stop>\")\n_result = sp.get_output()", expectedOutput: "['hello', 'world']", orderIndex: 1 },
+          { description: "token after stop ignored", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"a\"); sp.add_token(\"<stop>\"); sp.add_token(\"b\")\n_result = sp.get_output()", expectedOutput: "['a']", orderIndex: 2 },
+          { description: "no stop", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nsp.add_token(\"a\"); sp.add_token(\"b\")\n_result = sp.get_output()", expectedOutput: "['a', 'b']", orderIndex: 3 },
         ],
       },
       {
@@ -172,15 +177,17 @@ sp.get_output()         # → ["a", "b"]
         return self.buffer[:]
 
     def is_stopped(self) -> bool:
+        # Exposes the latch so a caller can tell "no output yet" apart from
+        # "stream finished" without inspecting the buffer.
         return self.stopped`,
         solutionExplanation: `\`is_stopped()\` simply exposes the internal \`stopped\` flag. The multi-stop-token support was already handled by using a \`set\` in Stage 1 — no changes needed there.
 
 The key insight is that the \`set\` data structure makes this O(1) regardless of how many stop tokens are configured.`,
         testCases: [
-          { description: "is_stopped false", inputData: "sp = TokenStreamProcessor([\"<stop>\", \"<end>\"])\nsp.add_token(\"a\")\nresult = sp.is_stopped()", expectedOutput: "False", orderIndex: 0 },
-          { description: "is_stopped true", inputData: "sp = TokenStreamProcessor([\"<stop>\", \"<end>\"])\nsp.add_token(\"a\"); sp.add_token(\"<end>\")\nresult = sp.is_stopped()", expectedOutput: "True", orderIndex: 1 },
-          { description: "multi stop tokens", inputData: "sp = TokenStreamProcessor([\"<stop>\", \"<end>\", \"DONE\"])\nfor t in [\"a\",\"b\",\"c\",\"DONE\",\"d\"]: sp.add_token(t)\nresult = sp.get_output()", expectedOutput: "['a', 'b', 'c']", orderIndex: 2 },
-          { description: "empty stream", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\nresult = (sp.get_output(), sp.is_stopped())", expectedOutput: "([], False)", orderIndex: 3 },
+          { description: "is_stopped false", inputData: "sp = TokenStreamProcessor([\"<stop>\", \"<end>\"])\nsp.add_token(\"a\")\n_result = sp.is_stopped()", expectedOutput: "False", orderIndex: 0 },
+          { description: "is_stopped true", inputData: "sp = TokenStreamProcessor([\"<stop>\", \"<end>\"])\nsp.add_token(\"a\"); sp.add_token(\"<end>\")\n_result = sp.is_stopped()", expectedOutput: "True", orderIndex: 1 },
+          { description: "multi stop tokens", inputData: "sp = TokenStreamProcessor([\"<stop>\", \"<end>\", \"DONE\"])\nfor t in [\"a\",\"b\",\"c\",\"DONE\",\"d\"]: sp.add_token(t)\n_result = sp.get_output()", expectedOutput: "['a', 'b', 'c']", orderIndex: 2 },
+          { description: "empty stream", inputData: "sp = TokenStreamProcessor([\"<stop>\"])\n_result = (sp.get_output(), sp.is_stopped())", expectedOutput: "([], False)", orderIndex: 3 },
         ],
       },
     ]
@@ -235,21 +242,25 @@ class JSONValidator:
 
 class JSONValidator:
     def validate(self, s: str) -> bool:
+        # Stage 1 leans on the standard library; Stage 2 replaces this with a
+        # hand-written recursive-descent parser.
         try:
             json.loads(s)
             return True
+        # JSONDecodeError subclasses ValueError, but both are named so the
+        # intent stays clear if the parser is swapped out later.
         except (json.JSONDecodeError, ValueError):
             return False`,
         solutionExplanation: `\`json.loads\` raises \`json.JSONDecodeError\` (a subclass of \`ValueError\`) on any invalid input. Wrapping it in a try/except is the idiomatic Python approach.
 
 Note: \`json.loads\` is strict — it rejects trailing content, unquoted keys, single-quoted strings, and JavaScript-style comments.`,
         testCases: [
-          { description: "valid object", inputData: "import json\nv = JSONValidator()\nresult = v.validate('{\"key\": \"value\"}')", expectedOutput: "True", orderIndex: 0 },
-          { description: "valid array", inputData: "import json\nv = JSONValidator()\nresult = v.validate('[1, 2, 3]')", expectedOutput: "True", orderIndex: 1 },
-          { description: "unquoted key", inputData: "import json\nv = JSONValidator()\nresult = v.validate('{key: value}')", expectedOutput: "False", orderIndex: 2 },
-          { description: "trailing content", inputData: "import json\nv = JSONValidator()\nresult = v.validate('{\"a\": 1} extra')", expectedOutput: "False", orderIndex: 3 },
-          { description: "valid null", inputData: "import json\nv = JSONValidator()\nresult = v.validate('null')", expectedOutput: "True", orderIndex: 4 },
-          { description: "unclosed bracket", inputData: "import json\nv = JSONValidator()\nresult = v.validate('{\"a\": 1')", expectedOutput: "False", orderIndex: 5 },
+          { description: "valid object", inputData: "import json\nv = JSONValidator()\n_result = v.validate('{\"key\": \"value\"}')", expectedOutput: "True", orderIndex: 0 },
+          { description: "valid array", inputData: "import json\nv = JSONValidator()\n_result = v.validate('[1, 2, 3]')", expectedOutput: "True", orderIndex: 1 },
+          { description: "unquoted key", inputData: "import json\nv = JSONValidator()\n_result = v.validate('{key: value}')", expectedOutput: "False", orderIndex: 2 },
+          { description: "trailing content", inputData: "import json\nv = JSONValidator()\n_result = v.validate('{\"a\": 1} extra')", expectedOutput: "False", orderIndex: 3 },
+          { description: "valid null", inputData: "import json\nv = JSONValidator()\n_result = v.validate('null')", expectedOutput: "True", orderIndex: 4 },
+          { description: "unclosed bracket", inputData: "import json\nv = JSONValidator()\n_result = v.validate('{\"a\": 1')", expectedOutput: "False", orderIndex: 5 },
         ],
       },
       {
@@ -329,7 +340,7 @@ class JSONValidator:
         return False, i
 
     def _skip_ws(self, s, i):
-        while i < len(s) and s[i] in ' \t\n\r':
+        while i < len(s) and s[i] in ' \\t\\n\\r':
             i += 1
         return i
 
@@ -337,7 +348,7 @@ class JSONValidator:
         if s[i] != '"': return False, i
         i += 1
         while i < len(s):
-            if s[i] == '\\': i += 2
+            if s[i] == '\\\\': i += 2
             elif s[i] == '"': return True, i+1
             else: i += 1
         return False, i
@@ -395,11 +406,11 @@ array  → "[" (value ("," value)*)? "]"
 
 This is the same technique used in real JSON parsers, compilers, and expression evaluators.`,
         testCases: [
-          { description: "valid nested", inputData: "import json\nv = JSONValidator()\nresult = v.validate_custom('{\"a\": [1, true, null]}')", expectedOutput: "True", orderIndex: 0 },
-          { description: "unquoted key", inputData: "import json\nv = JSONValidator()\nresult = v.validate_custom('{a: 1}')", expectedOutput: "False", orderIndex: 1 },
-          { description: "valid number", inputData: "import json\nv = JSONValidator()\nresult = v.validate_custom('42')", expectedOutput: "True", orderIndex: 2 },
-          { description: "valid bool", inputData: "import json\nv = JSONValidator()\nresult = v.validate_custom('true')", expectedOutput: "True", orderIndex: 3 },
-          { description: "unclosed array", inputData: "import json\nv = JSONValidator()\nresult = v.validate_custom('[1, 2')", expectedOutput: "False", orderIndex: 4 },
+          { description: "valid nested", inputData: "import json\nv = JSONValidator()\n_result = v.validate_custom('{\"a\": [1, true, null]}')", expectedOutput: "True", orderIndex: 0 },
+          { description: "unquoted key", inputData: "import json\nv = JSONValidator()\n_result = v.validate_custom('{a: 1}')", expectedOutput: "False", orderIndex: 1 },
+          { description: "valid number", inputData: "import json\nv = JSONValidator()\n_result = v.validate_custom('42')", expectedOutput: "True", orderIndex: 2 },
+          { description: "valid bool", inputData: "import json\nv = JSONValidator()\n_result = v.validate_custom('true')", expectedOutput: "True", orderIndex: 3 },
+          { description: "unclosed array", inputData: "import json\nv = JSONValidator()\n_result = v.validate_custom('[1, 2')", expectedOutput: "False", orderIndex: 4 },
         ],
       },
     ]
@@ -446,18 +457,21 @@ s.top_k_contains(apps, "xyz", 2)   # → []
         pass`,
         solution: `class AppSearch:
     def top_k_contains(self, apps: list[tuple], query: str, k: int) -> list[str]:
+        # Case-insensitive substring match.
         query = query.lower()
         relevant = [(score, name) for name, score in apps if query in name.lower()]
+        # Rank by score descending, then name ascending so equal scores get a
+        # stable, predictable alphabetical order.
         relevant.sort(key=lambda x: (-x[0], x[1]))
         return [name for _, name in relevant[:k]]`,
         solutionExplanation: `Filter apps by case-insensitive contains, then sort with a composite key: \`(-score, name)\`. The negative score makes higher scores sort first; name provides alphabetical tiebreaking.
 
 **Time:** O(n log n). **Space:** O(n).`,
         testCases: [
-          { description: "top 3 by s", inputData: "apps = [(\"Spotify\", 95), (\"Snapchat\", 80), (\"Slack\", 70), (\"Skype\", 60), (\"Notes\", 50)]\ns = AppSearch()\nresult = s.top_k_contains(apps, \"s\", 3)", expectedOutput: "['Spotify', 'Snapchat', 'Slack']", orderIndex: 0 },
-          { description: "no match", inputData: "apps = [(\"Spotify\", 95)]\ns = AppSearch()\nresult = s.top_k_contains(apps, \"xyz\", 2)", expectedOutput: "[]", orderIndex: 1 },
-          { description: "k > results", inputData: "apps = [(\"Notes\", 50)]\ns = AppSearch()\nresult = s.top_k_contains(apps, \"notes\", 5)", expectedOutput: "['Notes']", orderIndex: 2 },
-          { description: "tiebreak by name", inputData: "apps = [(\"Abc\", 5), (\"Abd\", 5)]\ns = AppSearch()\nresult = s.top_k_contains(apps, \"ab\", 2)", expectedOutput: "['Abc', 'Abd']", orderIndex: 3 },
+          { description: "top 3 by s", inputData: "apps = [(\"Spotify\", 95), (\"Snapchat\", 80), (\"Slack\", 70), (\"Skype\", 60), (\"Notes\", 50)]\ns = AppSearch()\n_result = s.top_k_contains(apps, \"s\", 3)", expectedOutput: "['Spotify', 'Snapchat', 'Slack']", orderIndex: 0 },
+          { description: "no match", inputData: "apps = [(\"Spotify\", 95)]\ns = AppSearch()\n_result = s.top_k_contains(apps, \"xyz\", 2)", expectedOutput: "[]", orderIndex: 1 },
+          { description: "k > results", inputData: "apps = [(\"Notes\", 50)]\ns = AppSearch()\n_result = s.top_k_contains(apps, \"notes\", 5)", expectedOutput: "['Notes']", orderIndex: 2 },
+          { description: "tiebreak by name", inputData: "apps = [(\"Abc\", 5), (\"Abd\", 5)]\ns = AppSearch()\n_result = s.top_k_contains(apps, \"ab\", 2)", expectedOutput: "['Abc', 'Abd']", orderIndex: 3 },
         ],
       },
       {
@@ -496,6 +510,8 @@ s.top_k_prefix(apps, "sp", 2)   # → ["Spotify"]  (only Spotify starts with "sp
 
     def top_k_prefix(self, apps: list[tuple], query: str, k: int) -> list[str]:
         query = query.lower()
+        # Only difference from the contains variant is the match predicate:
+        # startswith is strictly narrower, so prefix results are a subset.
         relevant = [(score, name) for name, score in apps if name.lower().startswith(query)]
         relevant.sort(key=lambda x: (-x[0], x[1]))
         return [name for _, name in relevant[:k]]`,
@@ -503,10 +519,10 @@ s.top_k_prefix(apps, "sp", 2)   # → ["Spotify"]  (only Spotify starts with "sp
 
 For large datasets, a **Trie** data structure enables O(|query| + k) prefix lookups instead of O(n).`,
         testCases: [
-          { description: "prefix s top 2", inputData: "apps = [(\"Spotify\", 95), (\"Snapchat\", 80), (\"Slack\", 70), (\"Skype\", 60)]\ns = AppSearch()\nresult = s.top_k_prefix(apps, \"s\", 2)", expectedOutput: "['Spotify', 'Snapchat']", orderIndex: 0 },
-          { description: "prefix sp", inputData: "apps = [(\"Spotify\", 95), (\"Snapchat\", 80), (\"Slack\", 70)]\ns = AppSearch()\nresult = s.top_k_prefix(apps, \"sp\", 2)", expectedOutput: "['Spotify']", orderIndex: 1 },
-          { description: "no prefix match", inputData: "apps = [(\"Spotify\", 95)]\ns = AppSearch()\nresult = s.top_k_prefix(apps, \"z\", 3)", expectedOutput: "[]", orderIndex: 2 },
-          { description: "tiebreak", inputData: "apps = [(\"Abc\", 5), (\"Abd\", 5)]\ns = AppSearch()\nresult = s.top_k_prefix(apps, \"ab\", 2)", expectedOutput: "['Abc', 'Abd']", orderIndex: 3 },
+          { description: "prefix s top 2", inputData: "apps = [(\"Spotify\", 95), (\"Snapchat\", 80), (\"Slack\", 70), (\"Skype\", 60)]\ns = AppSearch()\n_result = s.top_k_prefix(apps, \"s\", 2)", expectedOutput: "['Spotify', 'Snapchat']", orderIndex: 0 },
+          { description: "prefix sp", inputData: "apps = [(\"Spotify\", 95), (\"Snapchat\", 80), (\"Slack\", 70)]\ns = AppSearch()\n_result = s.top_k_prefix(apps, \"sp\", 2)", expectedOutput: "['Spotify']", orderIndex: 1 },
+          { description: "no prefix match", inputData: "apps = [(\"Spotify\", 95)]\ns = AppSearch()\n_result = s.top_k_prefix(apps, \"z\", 3)", expectedOutput: "[]", orderIndex: 2 },
+          { description: "tiebreak", inputData: "apps = [(\"Abc\", 5), (\"Abd\", 5)]\ns = AppSearch()\n_result = s.top_k_prefix(apps, \"ab\", 2)", expectedOutput: "['Abc', 'Abd']", orderIndex: 3 },
         ],
       },
     ]
@@ -553,14 +569,16 @@ r.rotate_180([[1,2,3],[4,5,6],[7,8,9]])
         solution: `class GridRotator:
     def rotate_180(self, grid: list[list[int]]) -> list[list[int]]:
         n, m = len(grid), len(grid[0])
+        # A 180 degree turn maps (i, j) -> (n-1-i, m-1-j): both axes reverse.
+        # Building a new grid avoids the in-place swap's midpoint edge case.
         return [[grid[n-1-i][m-1-j] for j in range(m)] for i in range(n)]`,
         solutionExplanation: `A 180° rotation is equivalent to reversing the entire flattened grid. Element \`(i,j)\` maps to \`(n-1-i, m-1-j)\`. This can also be achieved by reversing each row and then reversing the row order (or vice versa).
 
 **Time:** O(n·m). **Space:** O(n·m) for the output grid.`,
         testCases: [
-          { description: "3x3", inputData: "r = GridRotator()\nresult = r.rotate_180([[1,2,3],[4,5,6],[7,8,9]])", expectedOutput: "[[9, 8, 7], [6, 5, 4], [3, 2, 1]]", orderIndex: 0 },
-          { description: "single cell", inputData: "r = GridRotator()\nresult = r.rotate_180([[5]])", expectedOutput: "[[5]]", orderIndex: 1 },
-          { description: "2x2", inputData: "r = GridRotator()\nresult = r.rotate_180([[1,2],[3,4]])", expectedOutput: "[[4, 3], [2, 1]]", orderIndex: 2 },
+          { description: "3x3", inputData: "r = GridRotator()\n_result = r.rotate_180([[1,2,3],[4,5,6],[7,8,9]])", expectedOutput: "[[9, 8, 7], [6, 5, 4], [3, 2, 1]]", orderIndex: 0 },
+          { description: "single cell", inputData: "r = GridRotator()\n_result = r.rotate_180([[5]])", expectedOutput: "[[5]]", orderIndex: 1 },
+          { description: "2x2", inputData: "r = GridRotator()\n_result = r.rotate_180([[1,2],[3,4]])", expectedOutput: "[[4, 3], [2, 1]]", orderIndex: 2 },
         ],
       },
       {
@@ -601,9 +619,9 @@ r.rotate_180([[1,2,3,4]])
 
 Alternative: \`[row[::-1] for row in grid[::-1]]\` — reverse each row, then reverse the list of rows.`,
         testCases: [
-          { description: "2x3", inputData: "r = GridRotator()\nresult = r.rotate_180_nm([[1,2,3],[4,5,6]])", expectedOutput: "[[6, 5, 4], [3, 2, 1]]", orderIndex: 0 },
-          { description: "1x4", inputData: "r = GridRotator()\nresult = r.rotate_180_nm([[1,2,3,4]])", expectedOutput: "[[4, 3, 2, 1]]", orderIndex: 1 },
-          { description: "3x1", inputData: "r = GridRotator()\nresult = r.rotate_180_nm([[1],[2],[3]])", expectedOutput: "[[3], [2], [1]]", orderIndex: 2 },
+          { description: "2x3", inputData: "r = GridRotator()\n_result = r.rotate_180_nm([[1,2,3],[4,5,6]])", expectedOutput: "[[6, 5, 4], [3, 2, 1]]", orderIndex: 0 },
+          { description: "1x4", inputData: "r = GridRotator()\n_result = r.rotate_180_nm([[1,2,3,4]])", expectedOutput: "[[4, 3, 2, 1]]", orderIndex: 1 },
+          { description: "3x1", inputData: "r = GridRotator()\n_result = r.rotate_180_nm([[1],[2],[3]])", expectedOutput: "[[3], [2], [1]]", orderIndex: 2 },
         ],
       },
     ]
@@ -660,8 +678,11 @@ g.count_components(4, [[0,1],[1,2],[2,3]])  # → 1
         return len(set(find(i) for i in range(n)))`,
         solution: `class GraphGridArray:
     def count_components(self, n: int, edges: list[list[int]]) -> int:
+        # Union-find: every node starts as its own component.
         parent = list(range(n))
         def find(x):
+            # Path halving flattens the tree as it walks up, so repeated
+            # lookups stay near-constant time.
             while parent[x] != x:
                 parent[x] = parent[parent[x]]
                 x = parent[x]
@@ -672,6 +693,8 @@ g.count_components(4, [[0,1],[1,2],[2,3]])  # → 1
                 parent[pa] = pb
         for u, v in edges:
             union(u, v)
+        # Distinct roots == number of connected components. Counting roots
+        # at the end avoids maintaining a running tally during merges.
         return len(set(find(i) for i in range(n)))`,
         solutionExplanation: `**Union-Find** (Disjoint Set Union) is the canonical solution. Each node starts as its own component. For each edge, we union the two components. Path compression in \`find\` keeps the tree flat.
 
@@ -679,10 +702,10 @@ After processing all edges, the number of unique roots equals the number of comp
 
 **Time:** O(n·α(n)) ≈ O(n) with path compression. **Space:** O(n).`,
         testCases: [
-          { description: "two components", inputData: "g = GraphGridArray()\nresult = g.count_components(5, [[0,1],[1,2],[3,4]])", expectedOutput: "2", orderIndex: 0 },
-          { description: "no edges", inputData: "g = GraphGridArray()\nresult = g.count_components(3, [])", expectedOutput: "3", orderIndex: 1 },
-          { description: "all connected", inputData: "g = GraphGridArray()\nresult = g.count_components(4, [[0,1],[1,2],[2,3]])", expectedOutput: "1", orderIndex: 2 },
-          { description: "single node", inputData: "g = GraphGridArray()\nresult = g.count_components(1, [])", expectedOutput: "1", orderIndex: 3 },
+          { description: "two components", inputData: "g = GraphGridArray()\n_result = g.count_components(5, [[0,1],[1,2],[3,4]])", expectedOutput: "2", orderIndex: 0 },
+          { description: "no edges", inputData: "g = GraphGridArray()\n_result = g.count_components(3, [])", expectedOutput: "3", orderIndex: 1 },
+          { description: "all connected", inputData: "g = GraphGridArray()\n_result = g.count_components(4, [[0,1],[1,2],[2,3]])", expectedOutput: "1", orderIndex: 2 },
+          { description: "single node", inputData: "g = GraphGridArray()\n_result = g.count_components(1, [])", expectedOutput: "1", orderIndex: 3 },
         ],
       },
       {
@@ -731,8 +754,11 @@ g.num_islands([["0","0"],["0","0"]])                         # → 0
         pass`,
         solution: `class GraphGridArray:
     def count_components(self, n: int, edges: list[list[int]]) -> int:
+        # Union-find: every node starts as its own component.
         parent = list(range(n))
         def find(x):
+            # Path halving flattens the tree as it walks up, so repeated
+            # lookups stay near-constant time.
             while parent[x] != x:
                 parent[x] = parent[parent[x]]
                 x = parent[x]
@@ -743,6 +769,8 @@ g.num_islands([["0","0"],["0","0"]])                         # → 0
                 parent[pa] = pb
         for u, v in edges:
             union(u, v)
+        # Distinct roots == number of connected components. Counting roots
+        # at the end avoids maintaining a running tally during merges.
         return len(set(find(i) for i in range(n)))
 
     def num_islands(self, grid: list[list[str]]) -> int:
@@ -751,16 +779,22 @@ g.num_islands([["0","0"],["0","0"]])                         # → 0
         rows, cols = len(grid), len(grid[0])
         visited = [[False]*cols for _ in range(rows)]
         def dfs(r, c):
+            # Bounds check first, so the recursive calls below can be issued
+            # unconditionally for all four neighbours.
             if r < 0 or r >= rows or c < 0 or c >= cols:
                 return
+            # Stop at water, and at cells this traversal already claimed.
             if visited[r][c] or grid[r][c] == '0':
                 return
             visited[r][c] = True
+            # 4-directional only: diagonals do not connect an island.
             for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
                 dfs(r+dr, c+dc)
         count = 0
         for r in range(rows):
             for c in range(cols):
+                # Each unvisited land cell starts exactly one new island;
+                # the dfs then absorbs the whole landmass.
                 if not visited[r][c] and grid[r][c] == '1':
                     dfs(r, c)
                     count += 1
@@ -771,10 +805,10 @@ g.num_islands([["0","0"],["0","0"]])                         # → 0
 
 This is LeetCode 200 — one of the most commonly asked graph problems.`,
         testCases: [
-          { description: "two islands", inputData: "g = GraphGridArray()\nresult = g.num_islands([[\"1\",\"1\",\"0\"],[\"0\",\"1\",\"0\"],[\"0\",\"0\",\"1\"]])", expectedOutput: "2", orderIndex: 0 },
-          { description: "all water", inputData: "g = GraphGridArray()\nresult = g.num_islands([[\"0\",\"0\"],[\"0\",\"0\"]])", expectedOutput: "0", orderIndex: 1 },
-          { description: "all land", inputData: "g = GraphGridArray()\nresult = g.num_islands([[\"1\",\"1\"],[\"1\",\"1\"]])", expectedOutput: "1", orderIndex: 2 },
-          { description: "single cell", inputData: "g = GraphGridArray()\nresult = g.num_islands([[\"1\"]])", expectedOutput: "1", orderIndex: 3 },
+          { description: "two islands", inputData: "g = GraphGridArray()\n_result = g.num_islands([[\"1\",\"1\",\"0\"],[\"0\",\"1\",\"0\"],[\"0\",\"0\",\"1\"]])", expectedOutput: "2", orderIndex: 0 },
+          { description: "all water", inputData: "g = GraphGridArray()\n_result = g.num_islands([[\"0\",\"0\"],[\"0\",\"0\"]])", expectedOutput: "0", orderIndex: 1 },
+          { description: "all land", inputData: "g = GraphGridArray()\n_result = g.num_islands([[\"1\",\"1\"],[\"1\",\"1\"]])", expectedOutput: "1", orderIndex: 2 },
+          { description: "single cell", inputData: "g = GraphGridArray()\n_result = g.num_islands([[\"1\"]])", expectedOutput: "1", orderIndex: 3 },
         ],
       },
       {
@@ -918,10 +952,10 @@ This invariant guarantees we converge to a peak in O(log n) time — much better
 
 This is LeetCode 162 — a classic binary search application.`,
         testCases: [
-          { description: "peak at index 1", inputData: "g = GraphGridArray()\nresult = g.find_peak([1, 3, 2, 1])", expectedOutput: "1", orderIndex: 0 },
-          { description: "ascending", inputData: "g = GraphGridArray()\nresult = g.find_peak([1, 2, 3])", expectedOutput: "2", orderIndex: 1 },
-          { description: "single", inputData: "g = GraphGridArray()\nresult = g.find_peak([5])", expectedOutput: "0", orderIndex: 2 },
-          { description: "descending", inputData: "g = GraphGridArray()\nresult = g.find_peak([3, 2, 1])", expectedOutput: "0", orderIndex: 3 },
+          { description: "peak at index 1", inputData: "g = GraphGridArray()\n_result = g.find_peak([1, 3, 2, 1])", expectedOutput: "1", orderIndex: 0 },
+          { description: "ascending", inputData: "g = GraphGridArray()\n_result = g.find_peak([1, 2, 3])", expectedOutput: "2", orderIndex: 1 },
+          { description: "single", inputData: "g = GraphGridArray()\n_result = g.find_peak([5])", expectedOutput: "0", orderIndex: 2 },
+          { description: "descending", inputData: "g = GraphGridArray()\n_result = g.find_peak([3, 2, 1])", expectedOutput: "0", orderIndex: 3 },
         ],
       },
     ]

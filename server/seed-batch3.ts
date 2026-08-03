@@ -1000,7 +1000,8 @@ Given a directory tree, identify groups of duplicate files — files whose byte 
 - **Stage 3** – handle very large files using chunked hashing (content-defined chunking)`,
       starterCode: `class FileDeduplicator:
     def find_duplicates(self, files: list) -> list:
-        """files: list of (path, content) tuples. Return list of groups (each group is a list of paths)."""        pass`,
+        """files: list of (path, content) tuples. Return list of groups (each group is a list of paths)."""
+        pass`,
       methodName: "FileDeduplicator",
     },
     [
@@ -1034,10 +1035,12 @@ from collections import defaultdict
 
 class FileDeduplicator:
     def _hash(self, content: str) -> str:
-        """Compute SHA-256 hash of content string."""        return hashlib.sha256(content.encode()).hexdigest()
+        """Compute SHA-256 hash of content string."""
+        return hashlib.sha256(content.encode()).hexdigest()
 
     def find_duplicates(self, files: list) -> list:
-        """Group files by content hash; return groups with 2+ files."""        groups = defaultdict(list)
+        """Group files by content hash; return groups with 2+ files."""
+        groups = defaultdict(list)
         for path, content in files:
             h = self._hash(content)
             groups[h].append(path)
@@ -1094,7 +1097,8 @@ class FileDeduplicator:
         return [sorted(paths) for paths in groups.values() if len(paths) >= 2]
 
     def find_duplicates_efficient(self, files: list) -> list:
-        """Two-pass: group by size, then hash within each size group."""        pass`,
+        """Two-pass: group by size, then hash within each size group."""
+        pass`,
         solution: `import hashlib
 from collections import defaultdict
 
@@ -1109,7 +1113,8 @@ class FileDeduplicator:
         return [sorted(paths) for paths in groups.values() if len(paths) >= 2]
 
     def find_duplicates_efficient(self, files: list) -> list:
-        """Two-pass dedup: size pre-filter then hash within size groups."""        # Pass 1: group by file size (len of content)
+        """Two-pass dedup: size pre-filter then hash within size groups."""
+        # Pass 1: group by file size (len of content)
         by_size = defaultdict(list)
         for path, content in files:
             by_size[len(content)].append((path, content))
@@ -1128,7 +1133,7 @@ class FileDeduplicator:
         solutionExplanation: "First group by content length (O(1) per file). Only hash within size groups that have 2+ files, avoiding unnecessary hashing of unique-size files.",
         testCases: [
           { description: 'size pre-filter skips unique sizes', inputData: `d = FileDeduplicator()\n_result = sorted(d.find_duplicates_efficient([('/a.txt','hi'),('/b.txt','hello'),('/c.txt','hi'),('/d.txt','world')]))`, expectedOutput: `[['/a.txt', '/c.txt']]`, orderIndex: 0 },
-          { description: 'same size but different content', inputData: `d = FileDeduplicator()\n_result = d.find_duplicates_efficient([('/a.txt','ab'),('/b.txt','cd'),('/c.txt','ab')])\n_result = sorted(_result)`, expectedOutput: `[['/a.txt', '/c.txt']]`, orderIndex: 1 },
+          { description: 'same size but different content', inputData: `d = FileDeduplicator()\nresult = d.find_duplicates_efficient([('/a.txt','ab'),('/b.txt','cd'),('/c.txt','ab')])\n_result = sorted(result)`, expectedOutput: `[['/a.txt', '/c.txt']]`, orderIndex: 1 },
           { description: 'all unique returns empty', inputData: `d = FileDeduplicator()\n_result = d.find_duplicates_efficient([('/a.txt','a'),('/b.txt','bb'),('/c.txt','ccc')])`, expectedOutput: `[]`, orderIndex: 2 },
         ],
       },
@@ -1213,19 +1218,22 @@ b.deposit('bob', 50, 5)       # 'account not found'
         self.accounts = {}  # account_id -> balance
 
     def create_account(self, account_id: str, timestamp: int) -> bool:
-        """Create account with zero balance. Return False if already exists."""        if account_id in self.accounts:
+        """Create account with zero balance. Return False if already exists."""
+        if account_id in self.accounts:
             return False
         self.accounts[account_id] = 0
         return True
 
     def deposit(self, account_id: str, amount: int, timestamp: int) -> str:
-        """Add amount to account. Return new balance or error string."""        if account_id not in self.accounts:
+        """Add amount to account. Return new balance or error string."""
+        if account_id not in self.accounts:
             return 'account not found'
         self.accounts[account_id] += amount
         return str(self.accounts[account_id])
 
     def withdraw(self, account_id: str, amount: int, timestamp: int) -> str:
-        """Subtract amount from account. Return new balance or error string."""        if account_id not in self.accounts:
+        """Subtract amount from account. Return new balance or error string."""
+        if account_id not in self.accounts:
             return 'account not found'
         if self.accounts[account_id] < amount:
             return 'insufficient funds'
@@ -1322,7 +1330,8 @@ b.transfer('alice', 'bob', 200, 5)  # 'insufficient funds'
         return str(self.accounts[account_id])
 
     def transfer(self, from_id: str, to_id: str, amount: int, timestamp: int) -> str:
-        """Transfer amount from from_id to to_id. Return new balance of from_id."""        if from_id == to_id:
+        """Transfer amount from from_id to to_id. Return new balance of from_id."""
+        if from_id == to_id:
             return 'cannot transfer to same account'
         if from_id not in self.accounts or to_id not in self.accounts:
             return 'account not found'
@@ -1418,11 +1427,13 @@ kv.get('y', 2)                 # None
         self.store = {}
 
     def set(self, key: str, value: str, timestamp: int, ttl: int = None) -> None:
-        """Store key with optional TTL expiry."""        expiry = timestamp + ttl if ttl is not None else None
+        """Store key with optional TTL expiry."""
+        expiry = timestamp + ttl if ttl is not None else None
         self.store[key] = (value, expiry)
 
     def get(self, key: str, timestamp: int):
-        """Return value if key exists and not expired."""        if key not in self.store:
+        """Return value if key exists and not expired."""
+        if key not in self.store:
             return None
         value, expiry = self.store[key]
         if expiry is not None and timestamp >= expiry:
@@ -1430,7 +1441,8 @@ kv.get('y', 2)                 # None
         return value
 
     def delete(self, key: str) -> bool:
-        """Remove key. Return True if it existed."""        if key in self.store:
+        """Remove key. Return True if it existed."""
+        if key in self.store:
             del self.store[key]
             return True
         return False`,
@@ -1528,10 +1540,12 @@ class KVStore:
         return False
 
     def backup(self, timestamp: int) -> None:
-        """Snapshot current store state."""        self.backups.append((timestamp, copy.deepcopy(self.store)))
+        """Snapshot current store state."""
+        self.backups.append((timestamp, copy.deepcopy(self.store)))
 
     def restore(self, timestamp: int) -> None:
-        """Restore to most recent backup at or before timestamp."""        # Find the latest backup with ts <= timestamp
+        """Restore to most recent backup at or before timestamp."""
+        # Find the latest backup with ts <= timestamp
         best = None
         for ts, snapshot in self.backups:
             if ts <= timestamp:
@@ -1568,7 +1582,8 @@ The problem is implemented in 3 progressive stages:
 - **Stage 3** – add a \`cache\` to avoid re-computing identical (image, pipeline) pairs`,
       starterCode: `class ImageProcessor:
     def process(self, image: dict, pipeline: list) -> dict:
-        """Apply a list of operations to an image dict. Return transformed image."""        pass`,
+        """Apply a list of operations to an image dict. Return transformed image."""
+        pass`,
       methodName: "ImageProcessor",
     },
     [
@@ -1597,14 +1612,16 @@ result = {'width': 400, 'height': 200, 'brightness': 128, 'rotation': 90}
     pass`,
         starterCode: `class ImageProcessor:
     def process(self, image: dict, pipeline: list) -> dict:
-        """Apply each operation in pipeline to a copy of image."""        img = dict(image)  # work on a copy
+        """Apply each operation in pipeline to a copy of image."""
+        img = dict(image)  # work on a copy
         for op in pipeline:
             # TODO: apply each operation type
             pass
         return img`,
         solution: `class ImageProcessor:
     def _apply_op(self, img: dict, op: dict) -> dict:
-        """Apply a single operation to img (in-place mutation of copy)."""        t = op['type']
+        """Apply a single operation to img (in-place mutation of copy)."""
+        t = op['type']
         if t == 'resize':
             img['width'] = int(img['width'] * op['scale'])
             img['height'] = int(img['height'] * op['scale'])
@@ -1618,7 +1635,8 @@ result = {'width': 400, 'height': 200, 'brightness': 128, 'rotation': 90}
         return img
 
     def process(self, image: dict, pipeline: list) -> dict:
-        """Apply pipeline of operations to a copy of image."""        img = dict(image)
+        """Apply pipeline of operations to a copy of image."""
+        img = dict(image)
         for op in pipeline:
             img = self._apply_op(img, op)
         return img`,
@@ -1688,7 +1706,8 @@ result = [[{'width':200,'height':100,'brightness':128,'rotation':0},
         return img
 
     def process_batch(self, images: list, pipelines: list) -> list:
-        """Return m x n matrix of results."""        pass`,
+        """Return m x n matrix of results."""
+        pass`,
         solution: `class ImageProcessor:
     def _apply_op(self, img, op):
         t = op['type']
@@ -1710,7 +1729,8 @@ result = [[{'width':200,'height':100,'brightness':128,'rotation':0},
         return img
 
     def process_batch(self, images: list, pipelines: list) -> list:
-        """Apply each pipeline to each image; return m x n result matrix."""        return [[self.process(img, pipe) for pipe in pipelines] for img in images]`,
+        """Apply each pipeline to each image; return m x n result matrix."""
+        return [[self.process(img, pipe) for pipe in pipelines] for img in images]`,
         solutionExplanation: "Simple nested list comprehension: for each image, for each pipeline, call process().",
         testCases: [
           { description: 'single image two pipelines', inputData: `p = ImageProcessor()\nimages = [{'width':100,'height':50,'brightness':128,'rotation':0}]\npipelines = [[{'type':'resize','scale':2.0}],[{'type':'rotate','degrees':90}]]\n_result = p.process_batch(images, pipelines)`, expectedOutput: `[[{'width': 200, 'height': 100, 'brightness': 128, 'rotation': 0}, {'width': 100, 'height': 50, 'brightness': 128, 'rotation': 90}]]`, orderIndex: 0 },
@@ -1739,7 +1759,8 @@ The problem has three stages:
 - **Stage 3** – add a URL filter predicate`,
       starterCode: `class WebCrawler:
     def crawl(self, start_url: str, get_links) -> list:
-        """Return all unique URLs reachable from start_url within the same hostname."""        pass`,
+        """Return all unique URLs reachable from start_url within the same hostname."""
+        pass`,
       methodName: "WebCrawler",
     },
     [
@@ -1778,16 +1799,19 @@ class WebCrawler:
         return urlparse(url).netloc
 
     def crawl(self, start_url: str, get_links) -> list:
-        """BFS from start_url, only following same-hostname links."""        pass`,
+        """BFS from start_url, only following same-hostname links."""
+        pass`,
         solution: `from urllib.parse import urlparse
 from collections import deque
 
 class WebCrawler:
     def _hostname(self, url: str) -> str:
-        """Extract hostname from URL."""        return urlparse(url).netloc
+        """Extract hostname from URL."""
+        return urlparse(url).netloc
 
     def crawl(self, start_url: str, get_links) -> list:
-        """BFS crawler restricted to same hostname as start_url."""        target_host = self._hostname(start_url)
+        """BFS crawler restricted to same hostname as start_url."""
+        target_host = self._hostname(start_url)
         visited = {start_url}
         queue = deque([start_url])
         result = []
@@ -1865,7 +1889,8 @@ class WebCrawler:
         return result
 
     def crawl_with_depth(self, start_url: str, get_links, max_depth: int) -> list:
-        """BFS with depth limit. start_url is at depth 0."""        pass`,
+        """BFS with depth limit. start_url is at depth 0."""
+        pass`,
         solution: `from urllib.parse import urlparse
 from collections import deque
 
@@ -1888,7 +1913,8 @@ class WebCrawler:
         return result
 
     def crawl_with_depth(self, start_url: str, get_links, max_depth: int) -> list:
-        """BFS with max_depth limit. Queue stores (url, depth) pairs."""        target_host = self._hostname(start_url)
+        """BFS with max_depth limit. Queue stores (url, depth) pairs."""
+        target_host = self._hostname(start_url)
         visited = {start_url}
         # Queue stores (url, current_depth)
         queue = deque([(start_url, 0)])

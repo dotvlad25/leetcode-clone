@@ -40,20 +40,21 @@ s.min_deletions([[1,2],[2,3]])               # → 0
         pass`,
         starterCode: `class IntervalScheduler:
     def min_deletions(self, intervals: list[list[int]]) -> int:
-        intervals.sort(key=lambda x: x[1])
-        kept = 0
-        last_end = float('-inf')
-        for start, end in intervals:
-            if start >= last_end:
-                kept += 1
-                last_end = end
-        return len(intervals) - kept`,
+        # Hint: sort by END time, then greedily keep every interval whose
+        # start is not before the last kept end.
+        # TODO: count how many intervals you can keep, then return
+        # len(intervals) - kept
+        pass`,
         solution: `class IntervalScheduler:
     def min_deletions(self, intervals: list[list[int]]) -> int:
+        # Activity selection: sorting by END time and greedily keeping every
+        # compatible interval provably maximises how many survive, which is
+        # the same as minimising how many must be deleted.
         intervals.sort(key=lambda x: x[1])
         kept = 0
         last_end = float('-inf')
         for start, end in intervals:
+            # >= not >: touching endpoints do not count as an overlap.
             if start >= last_end:
                 kept += 1
                 last_end = end
@@ -67,28 +68,28 @@ This is the classic "Activity Selection Problem".
           {
             description: `one removal`,
             inputData: `s = IntervalScheduler()
-result = s.min_deletions([[1,2],[2,3],[3,4],[1,3]])`,
+_result = s.min_deletions([[1,2],[2,3],[3,4],[1,3]])`,
             expectedOutput: `1`,
             orderIndex: 0,
           },
           {
             description: `two removals`,
             inputData: `s = IntervalScheduler()
-result = s.min_deletions([[1,2],[1,2],[1,2]])`,
+_result = s.min_deletions([[1,2],[1,2],[1,2]])`,
             expectedOutput: `2`,
             orderIndex: 1,
           },
           {
             description: `no removal`,
             inputData: `s = IntervalScheduler()
-result = s.min_deletions([[1,2],[2,3]])`,
+_result = s.min_deletions([[1,2],[2,3]])`,
             expectedOutput: `0`,
             orderIndex: 2,
           },
           {
             description: `empty`,
             inputData: `s = IntervalScheduler()
-result = s.min_deletions([])`,
+_result = s.min_deletions([])`,
             expectedOutput: `0`,
             orderIndex: 3,
           },
@@ -129,44 +130,51 @@ s.get_deletions([[1,2],[2,3],[3,4],[1,3]])  # → [[1,3]]
         pass`,
         solution: `class IntervalScheduler:
     def min_deletions(self, intervals: list[list[int]]) -> int:
+        # Activity selection: sorting by END time and greedily keeping every
+        # compatible interval provably maximises how many survive, which is
+        # the same as minimising how many must be deleted.
         intervals.sort(key=lambda x: x[1])
         kept = 0
         last_end = float('-inf')
         for start, end in intervals:
+            # >= not >: touching endpoints do not count as an overlap.
             if start >= last_end:
                 kept += 1
                 last_end = end
         return len(intervals) - kept
 
     def get_deletions(self, intervals: list[list[int]]) -> list[list[int]]:
+        # sorted() rather than .sort(): this must not reorder the caller's list.
         sorted_ivs = sorted(intervals, key=lambda x: x[1])
         kept_indices = set()
         last_end = float('-inf')
+        # Same greedy sweep, but recording WHICH intervals were kept.
         for i, (start, end) in enumerate(sorted_ivs):
             if start >= last_end:
                 kept_indices.add(i)
                 last_end = end
+        # Everything the greedy pass skipped is what has to go.
         return [iv for i, iv in enumerate(sorted_ivs) if i not in kept_indices]`,
         solutionExplanation: `Same greedy pass, but now we track which indices are kept. The deletions are all intervals NOT in the kept set.`,
         testCases: [
           {
             description: `one deletion`,
             inputData: `s = IntervalScheduler()
-result = s.get_deletions([[1,2],[2,3],[3,4],[1,3]])`,
+_result = s.get_deletions([[1,2],[2,3],[3,4],[1,3]])`,
             expectedOutput: `[[1, 3]]`,
             orderIndex: 0,
           },
           {
             description: `count matches`,
             inputData: `s = IntervalScheduler()
-result = len(s.get_deletions([[1,2],[1,2],[1,2]]))`,
+_result = len(s.get_deletions([[1,2],[1,2],[1,2]]))`,
             expectedOutput: `2`,
             orderIndex: 1,
           },
           {
             description: `no deletions`,
             inputData: `s = IntervalScheduler()
-result = s.get_deletions([[1,2],[2,3]])`,
+_result = s.get_deletions([[1,2],[2,3]])`,
             expectedOutput: `[]`,
             orderIndex: 2,
           },
@@ -211,25 +219,30 @@ wb.can_break('catsandog', ['cats','dog','sand','and','cat'])  # → False
     def can_break(self, s: str, word_dict: list[str]) -> bool:
         words = set(word_dict)
         n = len(s)
+        # dp[i] is True when s[:i] can be fully segmented.
         dp = [False] * (n + 1)
         dp[0] = True
         for i in range(1, n + 1):
             for j in range(i):
-                if dp[j] and s[j:i] in words:
-                    dp[i] = True
-                    break
+                # TODO: if s[:j] is breakable and s[j:i] is a dictionary
+                # word, mark dp[i] and stop scanning this i
+                pass
         return dp[n]`,
         solution: `class WordBreak:
     def can_break(self, s: str, word_dict: list[str]) -> bool:
         words = set(word_dict)
         n = len(s)
+        # dp[i] answers "can s[:i] be segmented?" — dp[0] is vacuously True
+        # because the empty prefix needs no words.
         dp = [False] * (n + 1)
         dp[0] = True
         for i in range(1, n + 1):
             for j in range(i):
+                # Split at j -- the left part must already be breakable and
+                # the right part must be a single dictionary word.
                 if dp[j] and s[j:i] in words:
                     dp[i] = True
-                    break
+                    break  # one witness is enough for this prefix
         return dp[n]`,
         solutionExplanation: `**DP**: dp[i] = True if s[:i] can be segmented. For each position i, check all substrings s[j:i].
 
@@ -238,28 +251,28 @@ wb.can_break('catsandog', ['cats','dog','sand','and','cat'])  # → False
           {
             description: `leetcode`,
             inputData: `wb = WordBreak()
-result = wb.can_break('leetcode', ['leet','code'])`,
+_result = wb.can_break('leetcode', ['leet','code'])`,
             expectedOutput: `True`,
             orderIndex: 0,
           },
           {
             description: `applepenapple`,
             inputData: `wb = WordBreak()
-result = wb.can_break('applepenapple', ['apple','pen'])`,
+_result = wb.can_break('applepenapple', ['apple','pen'])`,
             expectedOutput: `True`,
             orderIndex: 1,
           },
           {
             description: `catsandog`,
             inputData: `wb = WordBreak()
-result = wb.can_break('catsandog', ['cats','dog','sand','and','cat'])`,
+_result = wb.can_break('catsandog', ['cats','dog','sand','and','cat'])`,
             expectedOutput: `False`,
             orderIndex: 2,
           },
           {
             description: `single word`,
             inputData: `wb = WordBreak()
-result = wb.can_break('hello', ['hello'])`,
+_result = wb.can_break('hello', ['hello'])`,
             expectedOutput: `True`,
             orderIndex: 3,
           },
@@ -289,6 +302,7 @@ wb.all_breaks('catsanddog', ['cat','cats','and','sand','dog'])
         return dp[n]`,
         starterCode: `class WordBreak:
     def can_break(self, s: str, word_dict: list[str]) -> bool:
+        # Carried over from Stage 1 — still tested here.
         words = set(word_dict)
         n = len(s)
         dp = [False] * (n + 1)
@@ -304,21 +318,13 @@ wb.all_breaks('catsanddog', ['cat','cats','and','sand','dog'])
         words = set(word_dict)
         memo = {}
         def backtrack(start):
-            if start in memo:
-                return memo[start]
-            if start == len(s):
-                return [[]]
-            result = []
-            for end in range(start + 1, len(s) + 1):
-                word = s[start:end]
-                if word in words:
-                    for rest in backtrack(end):
-                        result.append([word] + rest)
-            memo[start] = result
-            return result
+            # TODO: return every segmentation of s[start:], memoising on
+            # start so shared suffixes are only solved once
+            pass
         return backtrack(0)`,
         solution: `class WordBreak:
     def can_break(self, s: str, word_dict: list[str]) -> bool:
+        # Carried over from Stage 1 — still tested cumulatively.
         words = set(word_dict)
         n = len(s)
         dp = [False] * (n + 1)
@@ -332,10 +338,15 @@ wb.all_breaks('catsanddog', ['cat','cats','and','sand','dog'])
 
     def all_breaks(self, s: str, word_dict: list[str]) -> list[list[str]]:
         words = set(word_dict)
+        # Memoise on start index: many segmentations share the same suffix,
+        # and without this the recursion is exponential on inputs like
+        # "aaaa..." with dictionary ["a", "aa"].
         memo = {}
         def backtrack(start):
             if start in memo:
                 return memo[start]
+            # Reaching the end yields exactly one segmentation: the empty one.
+            # Returning [[]] (not []) is what lets the caller prepend a word.
             if start == len(s):
                 return [[]]
             result = []
@@ -352,21 +363,22 @@ wb.all_breaks('catsanddog', ['cat','cats','and','sand','dog'])
           {
             description: `two segmentations`,
             inputData: `wb = WordBreak()
-result = sorted([sorted(r) for r in wb.all_breaks('catsanddog', ['cat','cats','and','sand','dog'])])`,
-            expectedOutput: `[['and', 'cat', 'dog'], ['and', 'cats', 'dog']]`,
+_result = sorted([sorted(r) for r in wb.all_breaks('catsanddog', ['cat','cats','and','sand','dog'])])`,
+            // "catsanddog" segments as "cats and dog" or "cat sand dog".
+            expectedOutput: `[['and', 'cats', 'dog'], ['cat', 'dog', 'sand']]`,
             orderIndex: 0,
           },
           {
             description: `no segmentation`,
             inputData: `wb = WordBreak()
-result = wb.all_breaks('catsandog', ['cat','cats','and','sand','dog'])`,
+_result = wb.all_breaks('catsandog', ['cat','cats','and','sand','dog'])`,
             expectedOutput: `[]`,
             orderIndex: 1,
           },
           {
             description: `single word`,
             inputData: `wb = WordBreak()
-result = wb.all_breaks('hello', ['hello'])`,
+_result = wb.all_breaks('hello', ['hello'])`,
             expectedOutput: `[['hello']]`,
             orderIndex: 2,
           },
@@ -422,29 +434,34 @@ class BigramPredictor:
 
 class BigramPredictor:
     def __init__(self):
+        # word -> Counter of the words seen directly after it
         self.bigrams = defaultdict(Counter)
 
     def train(self, corpus: str) -> None:
         words = corpus.split()
-        for i in range(len(words) - 1):
-            self.bigrams[words[i]][words[i+1]] += 1
+        # TODO: count each adjacent (words[i], words[i+1]) pair
+        pass
 
     def predict(self, word: str) -> str | None:
-        if word not in self.bigrams or not self.bigrams[word]:
-            return None
-        return self.bigrams[word].most_common(1)[0][0]`,
+        # TODO: return the most frequent follower, or None if unseen
+        pass`,
         solution: `from collections import defaultdict, Counter
 
 class BigramPredictor:
     def __init__(self):
+        # word -> Counter of the words observed immediately after it.
+        # A bigram model conditions only on the single preceding word.
         self.bigrams = defaultdict(Counter)
 
     def train(self, corpus: str) -> None:
         words = corpus.split()
+        # Stop at len-1: the final word has no successor to record.
         for i in range(len(words) - 1):
             self.bigrams[words[i]][words[i+1]] += 1
 
     def predict(self, word: str) -> str | None:
+        # Unseen word, or seen only as the very last token, means no
+        # prediction is possible.
         if word not in self.bigrams or not self.bigrams[word]:
             return None
         return self.bigrams[word].most_common(1)[0][0]`,
@@ -455,7 +472,7 @@ class BigramPredictor:
             inputData: `from collections import defaultdict, Counter
 bp = BigramPredictor()
 bp.train('the cat sat on the mat the cat ate')
-result = bp.predict('the')`,
+_result = bp.predict('the')`,
             expectedOutput: `'cat'`,
             orderIndex: 0,
           },
@@ -464,7 +481,7 @@ result = bp.predict('the')`,
             inputData: `from collections import defaultdict, Counter
 bp = BigramPredictor()
 bp.train('hello world')
-result = bp.predict('xyz')`,
+_result = bp.predict('xyz')`,
             expectedOutput: `None`,
             orderIndex: 1,
           },
@@ -473,7 +490,7 @@ result = bp.predict('xyz')`,
             inputData: `from collections import defaultdict, Counter
 bp = BigramPredictor()
 bp.train('hello world')
-result = bp.predict('hello')`,
+_result = bp.predict('hello')`,
             expectedOutput: `'world'`,
             orderIndex: 2,
           },
@@ -520,11 +537,9 @@ class BigramPredictor:
         return self.bigrams[word].most_common(1)[0][0]
 
     def predict_topk(self, word: str, k: int) -> list[tuple]:
-        if word not in self.bigrams:
-            return []
-        counts = self.bigrams[word]
-        total = sum(counts.values())
-        return [(w, c / total) for w, c in counts.most_common(k)]`,
+        # TODO: return the k most frequent followers as
+        # (word, count / total) tuples; [] when the word is unseen
+        pass`,
         solution: `from collections import defaultdict, Counter
 
 class BigramPredictor:
@@ -545,6 +560,8 @@ class BigramPredictor:
         if word not in self.bigrams:
             return []
         counts = self.bigrams[word]
+        # Maximum-likelihood estimate: each probability is this follower's
+        # count over the total number of times the word was followed at all.
         total = sum(counts.values())
         return [(w, c / total) for w, c in counts.most_common(k)]`,
         solutionExplanation: `Probabilities are computed as count/total — maximum likelihood estimation (MLE). \`Counter.most_common(k)\` gives the top-k in O(n log k) time.`,
@@ -554,7 +571,7 @@ class BigramPredictor:
             inputData: `from collections import defaultdict, Counter
 bp = BigramPredictor()
 bp.train('the cat sat on the mat the cat ate')
-result = bp.predict_topk('the', 2)`,
+_result = bp.predict_topk('the', 2)`,
             expectedOutput: `[('cat', 0.6666666666666666), ('mat', 0.3333333333333333)]`,
             orderIndex: 0,
           },
@@ -563,7 +580,7 @@ result = bp.predict_topk('the', 2)`,
             inputData: `from collections import defaultdict, Counter
 bp = BigramPredictor()
 bp.train('hello world')
-result = bp.predict_topk('xyz', 2)`,
+_result = bp.predict_topk('xyz', 2)`,
             expectedOutput: `[]`,
             orderIndex: 1,
           },
@@ -572,7 +589,7 @@ result = bp.predict_topk('xyz', 2)`,
             inputData: `from collections import defaultdict, Counter
 bp = BigramPredictor()
 bp.train('hello world')
-result = bp.predict_topk('hello', 1)`,
+_result = bp.predict_topk('hello', 1)`,
             expectedOutput: `[('world', 1.0)]`,
             orderIndex: 2,
           },
@@ -621,25 +638,32 @@ d.add_char('e')  # → 'code'
         pass`,
         starterCode: `class StreamWordDetector:
     def __init__(self, words: list[str]):
-        self.words = set(words)
+        # Sort longest-first so the longest match wins when words overlap.
+        self.words = sorted(set(words), key=len, reverse=True)
         self.max_len = max(len(w) for w in words) if words else 0
         self.buffer = []
 
     def add_char(self, c: str) -> str | None:
         self.buffer.append(c)
+        # Only the last max_len characters can complete a word.
         buf = ''.join(self.buffer[-self.max_len:])
-        for w in self.words:
-            if buf.endswith(w):
-                return w
-        return None`,
+        # TODO: return the first (longest) dictionary word that ends buf,
+        # or None when nothing matches
+        pass`,
         solution: `class StreamWordDetector:
     def __init__(self, words: list[str]):
-        self.words = set(words)
+        # Sorted longest-first so the longest match wins when dictionary
+        # words overlap (both 'code' and 'decode' end the buffer 'decode').
+        # Iterating a set here would make the winner arbitrary.
+        self.words = sorted(set(words), key=len, reverse=True)
         self.max_len = max(len(w) for w in words) if words else 0
         self.buffer = []
 
     def add_char(self, c: str) -> str | None:
         self.buffer.append(c)
+        # Only the last max_len characters can possibly complete a word,
+        # so the comparison cost stays bounded no matter how long the
+        # stream grows.
         buf = ''.join(self.buffer[-self.max_len:])
         for w in self.words:
             if buf.endswith(w):
@@ -651,22 +675,25 @@ d.add_char('e')  # → 'code'
             description: `detect code`,
             inputData: `d = StreamWordDetector(['code','coder','coding'])
 for c in 'cod': d.add_char(c)
-result = d.add_char('e')`,
+_result = d.add_char('e')`,
             expectedOutput: `'code'`,
             orderIndex: 0,
           },
           {
             description: `detect coder`,
-            inputData: `d = StreamWordDetector(['code','coder','coding'])
+            // 'code' is deliberately absent from the dictionary: from Stage 2
+            // onward a match clears the buffer, so if 'code' matched first the
+            // longer 'coder' could never be reached.
+            inputData: `d = StreamWordDetector(['coder','coding'])
 for c in 'code': d.add_char(c)
-result = d.add_char('r')`,
+_result = d.add_char('r')`,
             expectedOutput: `'coder'`,
             orderIndex: 1,
           },
           {
             description: `no match`,
             inputData: `d = StreamWordDetector(['code'])
-result = d.add_char('x')`,
+_result = d.add_char('x')`,
             expectedOutput: `None`,
             orderIndex: 2,
           },
@@ -674,7 +701,7 @@ result = d.add_char('x')`,
             description: `mid stream`,
             inputData: `d = StreamWordDetector(['code'])
 d.add_char('x'); d.add_char('c'); d.add_char('o'); d.add_char('d')
-result = d.add_char('e')`,
+_result = d.add_char('e')`,
             expectedOutput: `'code'`,
             orderIndex: 3,
           },
@@ -692,42 +719,41 @@ d.add_char('e')  # → 'decode'  (buffer cleared)
 \`\`\``,
         baseClass: `class StreamWordDetector:
     def __init__(self, words: list[str]):
-        self.words = set(words)
-        self.max_len = max(len(w) for w in words) if words else 0
-        self.buffer = []
+        pass
 
     def add_char(self, c: str) -> str | None:
-        self.buffer.append(c)
-        buf = ''.join(self.buffer[-self.max_len:])
-        for w in self.words:
-            if buf.endswith(w):
-                return w
-        return None`,
+        pass`,
         starterCode: `class StreamWordDetector:
     def __init__(self, words: list[str]):
-        self.words = set(words)
+        self.words = sorted(set(words), key=len, reverse=True)
         self.max_len = max(len(w) for w in words) if words else 0
         self.buffer = []
 
     def add_char(self, c: str) -> str | None:
         self.buffer.append(c)
+        # Stage 2 must inspect the WHOLE buffer, because removing a match
+        # can let an earlier prefix combine with later characters.
         buf = ''.join(self.buffer)
-        for w in self.words:
-            if buf.endswith(w):
-                self.buffer = list(buf[:-len(w)])
-                return w
-        return None`,
+        # TODO: on a match, strip the matched word off the end of the
+        # buffer before returning it
+        pass`,
         solution: `class StreamWordDetector:
     def __init__(self, words: list[str]):
-        self.words = set(words)
+        # Longest-first ordering matters more here than in Stage 1: once a
+        # match is removed the buffer changes, so matching 'code' instead of
+        # 'decode' would consume the wrong characters.
+        self.words = sorted(set(words), key=len, reverse=True)
         self.max_len = max(len(w) for w in words) if words else 0
         self.buffer = []
 
     def add_char(self, c: str) -> str | None:
         self.buffer.append(c)
+        # Unlike Stage 1 this scans the WHOLE buffer: removing a match can
+        # leave an earlier fragment that later characters complete.
         buf = ''.join(self.buffer)
         for w in self.words:
             if buf.endswith(w):
+                # Strip the matched word so it cannot be reported twice.
                 self.buffer = list(buf[:-len(w)])
                 return w
         return None`,
@@ -737,7 +763,7 @@ d.add_char('e')  # → 'decode'  (buffer cleared)
             description: `detect and clear`,
             inputData: `d = StreamWordDetector(['code','decode'])
 for c in 'decod': d.add_char(c)
-result = d.add_char('e')`,
+_result = d.add_char('e')`,
             expectedOutput: `'decode'`,
             orderIndex: 0,
           },
@@ -746,14 +772,14 @@ result = d.add_char('e')`,
             inputData: `d = StreamWordDetector(['code'])
 for c in 'code': d.add_char(c)
 d.add_char('c'); d.add_char('o'); d.add_char('d')
-result = d.add_char('e')`,
+_result = d.add_char('e')`,
             expectedOutput: `'code'`,
             orderIndex: 1,
           },
           {
             description: `no match`,
             inputData: `d = StreamWordDetector(['code'])
-result = d.add_char('x')`,
+_result = d.add_char('x')`,
             expectedOutput: `None`,
             orderIndex: 2,
           },
@@ -796,34 +822,38 @@ mp.minimax([[1,3,1],[1,5,1],[4,2,1]])  # → 3
         starterCode: `class MinimaxPath:
     def minimax(self, grid: list[list[int]]) -> int:
         n, m = len(grid), len(grid[0])
+        # dp[i][j] = smallest possible maximum along a path to (i, j)
         dp = [[float('inf')] * m for _ in range(n)]
         dp[0][0] = grid[0][0]
         for i in range(n):
             for j in range(m):
                 if i == 0 and j == 0:
                     continue
-                candidates = []
-                if i > 0:
-                    candidates.append(dp[i-1][j])
-                if j > 0:
-                    candidates.append(dp[i][j-1])
-                dp[i][j] = max(grid[i][j], min(candidates))
+                # TODO: take the cheaper of the cells above and to the left,
+                # then this path's max is max(grid[i][j], that value)
+                pass
         return dp[n-1][m-1]`,
         solution: `class MinimaxPath:
     def minimax(self, grid: list[list[int]]) -> int:
         n, m = len(grid), len(grid[0])
+        # dp[i][j] = the smallest possible maximum value along any path
+        # from the origin to (i, j).
         dp = [[float('inf')] * m for _ in range(n)]
         dp[0][0] = grid[0][0]
         for i in range(n):
             for j in range(m):
                 if i == 0 and j == 0:
                     continue
+                # Only two predecessors exist because moves are right/down.
                 candidates = []
                 if i > 0:
                     candidates.append(dp[i-1][j])
                 if j > 0:
                     candidates.append(dp[i][j-1])
+                # Take the cheaper way in (min), then this cell forces its
+                # own value into the running maximum (max).
                 dp[i][j] = max(grid[i][j], min(candidates))
+        # The destination is on every path, so its value always counts.
         return dp[n-1][m-1]`,
         solutionExplanation: `**DP**: dp[i][j] = minimum possible maximum value on any path from (0,0) to (i,j). At each cell, take the min over incoming directions, then max with the current cell value.
 
@@ -832,28 +862,30 @@ mp.minimax([[1,3,1],[1,5,1],[4,2,1]])  # → 3
           {
             description: `3x3 grid`,
             inputData: `mp = MinimaxPath()
-result = mp.minimax([[1,3,1],[1,5,1],[4,2,1]])`,
+_result = mp.minimax([[1,3,1],[1,5,1],[4,2,1]])`,
             expectedOutput: `3`,
             orderIndex: 0,
           },
           {
             description: `2x2 grid`,
             inputData: `mp = MinimaxPath()
-result = mp.minimax([[1,2],[3,4]])`,
-            expectedOutput: `3`,
+_result = mp.minimax([[1,2],[3,4]])`,
+            // Both paths (right-down and down-right) must pass through the
+            // destination cell 4, so the minimax value is 4, not 3.
+            expectedOutput: `4`,
             orderIndex: 1,
           },
           {
             description: `single cell`,
             inputData: `mp = MinimaxPath()
-result = mp.minimax([[7]])`,
+_result = mp.minimax([[7]])`,
             expectedOutput: `7`,
             orderIndex: 2,
           },
           {
             description: `1x3 row`,
             inputData: `mp = MinimaxPath()
-result = mp.minimax([[1,5,2]])`,
+_result = mp.minimax([[1,5,2]])`,
             expectedOutput: `5`,
             orderIndex: 3,
           },
@@ -907,22 +939,27 @@ mp.minimax_path([[1,3,1],[1,5,1],[4,2,1]])
         solution: `class MinimaxPath:
     def minimax(self, grid: list[list[int]]) -> int:
         n, m = len(grid), len(grid[0])
+        # dp[i][j] = smallest achievable maximum on any path to (i, j).
         dp = [[float('inf')] * m for _ in range(n)]
         dp[0][0] = grid[0][0]
         for i in range(n):
             for j in range(m):
                 if i == 0 and j == 0:
                     continue
+                # Right/down moves mean at most two predecessors.
                 candidates = []
                 if i > 0:
                     candidates.append(dp[i-1][j])
                 if j > 0:
                     candidates.append(dp[i][j-1])
+                # min picks the cheaper way in; max forces this cell into
+                # the running maximum.
                 dp[i][j] = max(grid[i][j], min(candidates))
         return dp[n-1][m-1]
 
     def minimax_path(self, grid: list[list[int]]) -> list[tuple]:
         n, m = len(grid), len(grid[0])
+        # Same table as minimax() — the path is recovered from it afterwards.
         dp = [[float('inf')] * m for _ in range(n)]
         dp[0][0] = grid[0][0]
         for i in range(n):
@@ -935,16 +972,18 @@ mp.minimax_path([[1,3,1],[1,5,1],[4,2,1]])
                 if j > 0:
                     candidates.append(dp[i][j-1])
                 dp[i][j] = max(grid[i][j], min(candidates))
+        # Walk backwards from the corner, each step choosing the predecessor
+        # with the smaller dp value — that is the move the forward pass took.
         path = []
         i, j = n - 1, m - 1
         while i > 0 or j > 0:
             path.append((i, j))
             if i == 0:
-                j -= 1
+                j -= 1          # pinned to the top row
             elif j == 0:
-                i -= 1
+                i -= 1          # pinned to the left column
             elif dp[i-1][j] <= dp[i][j-1]:
-                i -= 1
+                i -= 1          # ties go up, keeping the result deterministic
             else:
                 j -= 1
         path.append((0, 0))
@@ -954,21 +993,21 @@ mp.minimax_path([[1,3,1],[1,5,1],[4,2,1]])
           {
             description: `path starts at origin`,
             inputData: `mp = MinimaxPath()
-result = mp.minimax_path([[1,3,1],[1,5,1],[4,2,1]])[0]`,
+_result = mp.minimax_path([[1,3,1],[1,5,1],[4,2,1]])[0]`,
             expectedOutput: `(0, 0)`,
             orderIndex: 0,
           },
           {
             description: `path ends at corner`,
             inputData: `mp = MinimaxPath()
-result = mp.minimax_path([[1,3,1],[1,5,1],[4,2,1]])[-1]`,
+_result = mp.minimax_path([[1,3,1],[1,5,1],[4,2,1]])[-1]`,
             expectedOutput: `(2, 2)`,
             orderIndex: 1,
           },
           {
             description: `single cell path`,
             inputData: `mp = MinimaxPath()
-result = mp.minimax_path([[7]])`,
+_result = mp.minimax_path([[7]])`,
             expectedOutput: `[(0, 0)]`,
             orderIndex: 2,
           },
@@ -977,7 +1016,7 @@ result = mp.minimax_path([[7]])`,
             inputData: `mp = MinimaxPath()
 grid = [[1,3,1],[1,5,1],[4,2,1]]
 path = mp.minimax_path(grid)
-result = max(grid[r][c] for r,c in path)`,
+_result = max(grid[r][c] for r,c in path)`,
             expectedOutput: `3`,
             orderIndex: 3,
           },

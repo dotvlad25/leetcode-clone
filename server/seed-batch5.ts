@@ -79,14 +79,19 @@ rc.max_concurrent()  # → 2
         self.bookings.append((start, end))
 
     def count_at(self, time: int) -> int:
+        # Half-open interval: a booking ending exactly at that time is over.
         return sum(1 for s, e in self.bookings if s <= time < e)
 
     def max_concurrent(self) -> int:
         if not self.bookings: return 0
+        # Sweep line: turn each booking into a +1 at its start and a -1 at
+        # its end, then walk the timeline tracking the running total.
         events = []
         for s, e in self.bookings:
             events.append((s, 1))
             events.append((e, -1))
+        # Sorting tuples puts -1 before +1 at equal timestamps, so a booking
+        # that ends exactly when another starts does not count as an overlap.
         events.sort()
         current = max_val = 0
         for _, delta in events:
@@ -172,6 +177,7 @@ rc.request(2, 4)   # → True  (0+2*2=4 tokens→0)
         solution: `class RoomCounter:
     def __init__(self, capacity: int = 0, refill_rate: float = 0):
         self.bookings = []
+        # Token-bucket state: a full bucket at construction, refilled lazily.
         self.capacity = capacity
         self.refill_rate = refill_rate
         self.tokens = float(capacity)
@@ -179,17 +185,22 @@ rc.request(2, 4)   # → True  (0+2*2=4 tokens→0)
     def book(self, start, end): self.bookings.append((start, end))
     def count_at(self, time): return sum(1 for s,e in self.bookings if s<=time<e)
     def max_concurrent(self):
+        # Carried over from Stage 1: sweep line over start/end events.
         if not self.bookings: return 0
         events = [(s,1) for s,e in self.bookings]+[(e,-1) for s,e in self.bookings]
         events.sort(); cur=mx=0
         for _,d in events: cur+=d; mx=max(mx,cur)
         return mx
     def _refill(self, current_time):
+        # Lazy refill: rather than ticking on a timer, credit the tokens that
+        # would have accrued since the last request. min() caps the bucket.
         elapsed = current_time - self.last_refill
         self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)
         self.last_refill = current_time
     def request(self, current_time: int, tokens_needed: int = 1) -> bool:
         self._refill(current_time)
+        # Denied requests consume nothing, so a rejected caller can retry
+        # later without having burned budget.
         if self.tokens >= tokens_needed:
             self.tokens -= tokens_needed
             return True
@@ -296,16 +307,20 @@ s.iterate(id1)  # → [1, 3, 4]
         self.current.add(val)
 
     def remove(self, val: int) -> None:
+        # discard, not remove: deleting an absent value is a no-op here.
         self.current.discard(val)
 
     def snapshot(self) -> int:
         snap_id = self._next_id
+        # frozenset copies the contents, so later mutations of self.current
+        # cannot retroactively change an existing snapshot.
         self.snapshots[snap_id] = frozenset(self.current)
         self._next_id += 1
         return snap_id
 
     def iterate(self, snap_id: int) -> list[int]:
         if snap_id not in self.snapshots: return []
+        # Sets have no order, so sort for a deterministic result.
         return sorted(self.snapshots[snap_id])`,
         solutionExplanation: "Store snapshots as frozensets (immutable copies). snapshot() copies current set into a frozenset keyed by auto-incrementing ID. iterate() returns sorted list.",
         testCases: [
@@ -381,14 +396,17 @@ s.diff(id0, id1)  # → ([4], [2])
     def remove(self, val): self.current.discard(val)
     def snapshot(self):
         snap_id = self._next_id
+        # frozenset copy: snapshots are immutable once taken.
         self.snapshots[snap_id] = frozenset(self.current)
         self._next_id += 1; return snap_id
     def iterate(self, snap_id):
         if snap_id not in self.snapshots: return []
         return sorted(self.snapshots[snap_id])
     def diff(self, snap_id1: int, snap_id2: int) -> tuple:
+        # Missing ids degrade to the empty set rather than raising.
         s1 = self.snapshots.get(snap_id1, frozenset())
         s2 = self.snapshots.get(snap_id2, frozenset())
+        # (added, removed) going from snapshot 1 to snapshot 2.
         return (sorted(s2 - s1), sorted(s1 - s2))`,
         solutionExplanation: "frozenset operations: s2 - s1 gives added, s1 - s2 gives removed. Sort both for deterministic output.",
         testCases: [
@@ -461,8 +479,13 @@ d.assemble(["ATCG", "CGTA", "TACC"]) # → "ATCGTACC"
     def assemble(self, fragments: list[str]) -> str:
         if not fragments: return ''
         fragments = list(fragments)
+        # Drop fragments wholly contained in another: they add no information
+        # and would otherwise confuse the overlap search.
         fragments = [f for f in fragments
                      if not any(f != g and f in g for g in fragments)]
+        # Greedy shortest-common-superstring: repeatedly merge the pair with
+        # the largest overlap. Not provably optimal (SCS is NP-hard), but it
+        # is the standard approximation and behaves well on real reads.
         while len(fragments) > 1:
             best_overlap = -1
             best_i = best_j = 0
@@ -471,6 +494,7 @@ d.assemble(["ATCG", "CGTA", "TACC"]) # → "ATCGTACC"
                     if i == j: continue
                     a, b = fragments[i], fragments[j]
                     max_ov = min(len(a), len(b))
+                    # Try the longest overlap first and stop at the first hit.
                     for k in range(max_ov, 0, -1):
                         if a.endswith(b[:k]):
                             if k > best_overlap:
@@ -478,8 +502,10 @@ d.assemble(["ATCG", "CGTA", "TACC"]) # → "ATCGTACC"
                                 best_i, best_j = i, j
                             break
             if best_overlap <= 0:
+                # Nothing overlaps: concatenate arbitrarily to make progress.
                 fragments = [fragments[0] + fragments[1]] + fragments[2:]
             else:
+                # Splice b onto a, skipping the shared prefix.
                 merged = fragments[best_i] + fragments[best_j][best_overlap:]
                 new_frags = [merged]
                 for k, f in enumerate(fragments):
@@ -556,6 +582,7 @@ d.assemble_tagged([(2,'CGTA'),(1,'ATCG'),(3,'TACC')])  # → 'ATCGTACC'
         pass`,
         solution: `class DNAAssembler:
     def assemble(self, fragments):
+        # Carried over from Stage 1: greedy maximum-overlap merging.
         if not fragments: return ''
         fragments = list(fragments)
         fragments = [f for f in fragments if not any(f != g and f in g for g in fragments)]
@@ -575,6 +602,8 @@ d.assemble_tagged([(2,'CGTA'),(1,'ATCG'),(3,'TACC')])  # → 'ATCGTACC'
                 fragments = [merged]+[f for k,f in enumerate(fragments) if k!=best_i and k!=best_j]
         return fragments[0]
     def assemble_tagged(self, tagged_fragments: list) -> str:
+        # Tags give the true ordering, so sorting by tag removes the guesswork
+        # that makes the untagged version only approximate.
         sorted_frags = sorted(tagged_fragments, key=lambda x: x[0])
         return self.assemble([seq for _, seq in sorted_frags])`,
         solutionExplanation: "Sort by tag (position hint) to get approximate order, extract sequences, then call assemble().",
@@ -633,6 +662,8 @@ d.greedy_decode(steps)  # → ['A', 'B']
     def greedy_decode(self, log_probs_per_step: list[dict]) -> list[str]:
         result = []
         for step_probs in log_probs_per_step:
+            # Greedy: commit to the locally best token at every step and never
+            # reconsider. Fast, but it can miss a higher-scoring full sequence.
             best_token = max(step_probs, key=step_probs.get)
             result.append(best_token)
         return result`,
@@ -677,12 +708,17 @@ d.beam_search(steps, 1)  # → ['A', 'A', 'A']  (greedy, total -4.2)
         return [max(s, key=s.get) for s in log_probs_per_step]
     def beam_search(self, log_probs_per_step: list[dict], beam_width: int) -> list[str]:
         if not log_probs_per_step: return []
+        # Each beam is (cumulative log-prob, tokens so far). Log-probs are
+        # summed rather than multiplied, which avoids float underflow.
         beams = [(0.0, [])]
         for step_probs in log_probs_per_step:
+            # Expand every surviving beam by every possible next token...
             candidates = []
             for cum_lp, seq in beams:
                 for token, lp in step_probs.items():
                     candidates.append((cum_lp + lp, seq + [token]))
+            # ...then prune back to the best beam_width. Keeping several
+            # candidates is what lets a weak early token win overall.
             candidates.sort(key=lambda x: x[0], reverse=True)
             beams = candidates[:beam_width]
         return beams[0][1]`,
@@ -744,11 +780,13 @@ class TaskScheduler:
 
 class TaskScheduler:
     def order_tasks(self, n: int, dependencies: list[list[int]]) -> list[int]:
+        # Kahn algorithm: build the graph plus a count of unmet prerequisites.
         graph = [[] for _ in range(n)]
         in_degree = [0] * n
         for a, b in dependencies:
-            graph[a].append(b)
+            graph[a].append(b)   # a must run before b
             in_degree[b] += 1
+        # Anything with no prerequisites can start immediately.
         queue = deque(i for i in range(n) if in_degree[i] == 0)
         order = []
         while queue:
@@ -756,8 +794,10 @@ class TaskScheduler:
             order.append(node)
             for nb in graph[node]:
                 in_degree[nb] -= 1
+                # Last prerequisite satisfied, so this task is now runnable.
                 if in_degree[nb] == 0:
                     queue.append(nb)
+        # A short order means some tasks never became runnable: a cycle.
         return order if len(order) == n else []`,
         solutionExplanation: "Kahn's algorithm: build in-degree array, start BFS from nodes with in-degree 0, decrement neighbors' in-degrees. If output length < n, a cycle exists.",
         testCases: [
@@ -818,10 +858,12 @@ class TaskScheduler:
         # finish_time[i] = earliest_start[i] + durations[i]
         # Answer = max(finish_time)
         pass`,
-        solution: `from collections import deque
+        solution: `import heapq
+from collections import deque
 
 class TaskScheduler:
     def order_tasks(self, n, dependencies):
+        # Carried over from Stage 1: Kahn topological sort, [] on a cycle.
         graph = [[] for _ in range(n)]; in_degree = [0]*n
         for a,b in dependencies: graph[a].append(b); in_degree[b]+=1
         queue = deque(i for i in range(n) if in_degree[i]==0); order=[]
@@ -832,17 +874,38 @@ class TaskScheduler:
                 if in_degree[nb]==0: queue.append(nb)
         return order if len(order)==n else []
     def min_time(self, n: int, dependencies: list, durations: list, max_parallel: int) -> int:
+        if n == 0: return 0
+        # A cycle means the work can never finish.
+        if not self.order_tasks(n, dependencies): return -1
         graph = [[] for _ in range(n)]
-        for a, b in dependencies: graph[a].append(b)
-        topo = self.order_tasks(n, dependencies)
-        if not topo and n > 0: return -1
-        earliest_start = [0] * n
-        finish_time = [0] * n
-        for task in topo:
-            finish_time[task] = earliest_start[task] + durations[task]
-            for nb in graph[task]:
-                earliest_start[nb] = max(earliest_start[nb], finish_time[task])
-        return max(finish_time)`,
+        in_degree = [0] * n
+        for a, b in dependencies:
+            graph[a].append(b); in_degree[b] += 1
+        # Guard against a nonsensical worker count, which would otherwise
+        # leave the simulation unable to start anything.
+        workers = max(1, max_parallel)
+        # Event-driven simulation. A pure critical-path length would ignore
+        # max_parallel and under-report whenever workers are the bottleneck.
+        ready = [i for i in range(n) if in_degree[i] == 0]
+        heapq.heapify(ready)          # lowest task id first, for determinism
+        running = []                  # (finish_time, task)
+        time = 0
+        while ready or running:
+            # Fill every idle worker with whatever is runnable right now.
+            while ready and len(running) < workers:
+                task = heapq.heappop(ready)
+                heapq.heappush(running, (time + durations[task], task))
+            if not running:
+                break
+            # Jump to the next completion instead of ticking one unit at a time.
+            time = running[0][0]
+            while running and running[0][0] == time:
+                _, task = heapq.heappop(running)
+                for nb in graph[task]:
+                    in_degree[nb] -= 1
+                    if in_degree[nb] == 0:
+                        heapq.heappush(ready, nb)
+        return time`,
         solutionExplanation: "Process tasks in topological order. For each task, finish_time = earliest_start + duration. Propagate finish_time to all dependents as their earliest_start. Answer = max(finish_time).",
         testCases: [
           { description: "sequential chain takes sum of durations", inputData: `from collections import deque
@@ -854,9 +917,12 @@ _result = t.min_time(3, [[0,1],[0,2]], [1,2,2], 2)`, expectedOutput: `3`, orderI
           { description: "no dependencies returns max duration", inputData: `from collections import deque
 t = TaskScheduler()
 _result = t.min_time(3, [], [2,3,4], 3)`, expectedOutput: `4`, orderIndex: 2 },
+          { description: "worker limit forces serial execution", inputData: `from collections import deque
+t = TaskScheduler()
+_result = t.min_time(3, [], [2,3,4], 1)`, expectedOutput: `9`, orderIndex: 3 },
           { description: "single task", inputData: `from collections import deque
 t = TaskScheduler()
-_result = t.min_time(1, [], [5], 1)`, expectedOutput: `5`, orderIndex: 3 },
+_result = t.min_time(1, [], [5], 1)`, expectedOutput: `5`, orderIndex: 4 },
           { description: "diamond dependency", inputData: `from collections import deque
 t = TaskScheduler()
 _result = t.min_time(4, [[0,1],[0,2],[1,3],[2,3]], [1,2,2,1], 2)`, expectedOutput: `4`, orderIndex: 4 },

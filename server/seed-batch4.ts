@@ -63,13 +63,19 @@ class MeetingRooms:
     def min_rooms(self, intervals: list[list[int]]) -> int:
         if not intervals:
             return 0
+        # Process meetings in start order so "has a room freed up yet?" only
+        # ever needs to look at the single earliest end time.
         intervals = sorted(intervals, key=lambda x: x[0])
+        # Min-heap of end times, one entry per room currently in use.
         heap = []
         for start, end in intervals:
             if heap and heap[0] <= start:
+                # The earliest-finishing room is free: reuse it. heapreplace
+                # is one sift instead of a separate pop and push.
                 heapq.heapreplace(heap, end)
             else:
                 heapq.heappush(heap, end)
+        # Peak concurrency equals the number of rooms ever allocated.
         return len(heap)`,
         solutionExplanation: "Sort meetings by start time. Use a min-heap of end times. If the earliest-ending room finishes at or before the current meeting's start, reuse it (heapreplace). Otherwise allocate a new room (heappush). The heap size at the end is the answer.",
         testCases: [
@@ -126,6 +132,7 @@ class MeetingRooms:
 
 class MeetingRooms:
     def min_rooms(self, intervals):
+        # Carried over from Stage 1 — still tested cumulatively.
         if not intervals: return 0
         intervals = sorted(intervals, key=lambda x: x[0])
         heap = []
@@ -136,11 +143,14 @@ class MeetingRooms:
 
     def busiest_room(self, n: int, meetings: list[list[int]]) -> int:
         meetings = sorted(meetings, key=lambda x: (x[0], x[1]))
+        # Two heaps: free rooms ordered by number (lowest wins ties), and
+        # in-use rooms ordered by when they free up.
         available = list(range(n))
         heapq.heapify(available)
         in_use = []
         count = [0] * n
         for start, end in meetings:
+            # Reclaim every room whose meeting has ended by now.
             while in_use and in_use[0][0] <= start:
                 end_t, room = heapq.heappop(in_use)
                 heapq.heappush(available, room)
@@ -148,9 +158,12 @@ class MeetingRooms:
                 room = heapq.heappop(available)
                 heapq.heappush(in_use, (end, room))
             else:
+                # Fully booked: the meeting waits for the earliest room and
+                # keeps its original duration, so it ends later than planned.
                 end_t, room = heapq.heappop(in_use)
                 heapq.heappush(in_use, (end_t + (end - start), room))
             count[room] += 1
+        # .index returns the first maximum, i.e. the lowest room number on a tie.
         return count.index(max(count))`,
         solutionExplanation: "Two heaps: available (free room numbers, min-heap for lowest-numbered), in_use (end_time, room). For each meeting, free rooms that ended, assign lowest-numbered free room, or wait for earliest-ending room. Track count per room and return argmax.",
         testCases: [
@@ -235,6 +248,8 @@ class Waitlist:
         self.queue.append((name, party_size))
 
     def seat_next(self, table_size: int) -> str | None:
+        # Not strictly FIFO: scan from the front for the first party that
+        # actually fits, so one oversized party cannot block the whole line.
         for i, (name, size) in enumerate(self.queue):
             if size <= table_size:
                 del self.queue[i]
@@ -242,6 +257,7 @@ class Waitlist:
         return None
 
     def get_position(self, name: str) -> int:
+        # 1-based position for display; -1 when the party is not waiting.
         for i, (n, _) in enumerate(self.queue):
             if n == name:
                 return i + 1
@@ -292,6 +308,8 @@ class Waitlist:
 
 class Waitlist:
     def __init__(self):
+        # Two independent queues rather than one sorted list: priority is a
+        # strict tier, and FIFO order still holds within each tier.
         self.vip_queue = deque()
         self.reg_queue = deque()
 
@@ -302,6 +320,7 @@ class Waitlist:
             self.reg_queue.append((name, party_size))
 
     def _seat_from(self, q, table_size):
+        # Shared scan-for-first-that-fits used by both tiers.
         for i, (name, size) in enumerate(q):
             if size <= table_size:
                 del q[i]
@@ -309,12 +328,16 @@ class Waitlist:
         return None
 
     def seat_next(self, table_size: int) -> str | None:
+        # VIPs are exhausted first; regulars only get the table when no VIP
+        # fits it. Explicit "is not None" because a name could be falsy.
         result = self._seat_from(self.vip_queue, table_size)
         return result if result is not None else self._seat_from(self.reg_queue, table_size)
 
     def get_position(self, name: str) -> int:
         for i, (n, _) in enumerate(self.vip_queue):
             if n == name: return i + 1
+        # Regular positions are offset by the whole VIP queue, since every
+        # VIP is ahead of every regular.
         offset = len(self.vip_queue)
         for i, (n, _) in enumerate(self.reg_queue):
             if n == name: return offset + i + 1
@@ -371,9 +394,13 @@ t.earliest_fully_connected(3, [[0,1,1]])                   # → -1
         pass`,
         solution: `class NetworkTracker:
     def _make_uf(self, n):
+        # parent, union-by-rank heights, and a one-element list holding the
+        # live component count (a list so helpers can mutate it in place).
         return list(range(n)), [0] * n, [n]
 
     def _find(self, parent, x):
+        # Path halving: point each node at its grandparent while walking up,
+        # which flattens the tree without a second pass.
         while parent[x] != x:
             parent[x] = parent[parent[x]]
             x = parent[x]
@@ -381,7 +408,8 @@ t.earliest_fully_connected(3, [[0,1,1]])                   # → -1
 
     def _union(self, parent, rank, components, x, y):
         px, py = self._find(parent, x), self._find(parent, y)
-        if px == py: return False
+        if px == py: return False   # already connected
+        # Attach the shorter tree under the taller one to keep depth low.
         if rank[px] < rank[py]: px, py = py, px
         parent[py] = px
         if rank[px] == rank[py]: rank[px] += 1
@@ -389,13 +417,16 @@ t.earliest_fully_connected(3, [[0,1,1]])                   # → -1
         return True
 
     def earliest_fully_connected(self, n: int, edges: list[list[int]]) -> int:
+        # A single node is trivially connected but has no edge timestamp.
         if n == 1: return -1
+        # Process edges in time order and stop the moment everything merges
+        # into one component — that timestamp is the answer.
         edges = sorted(edges, key=lambda e: e[2])
         parent, rank, components = self._make_uf(n)
         for u, v, t in edges:
             self._union(parent, rank, components, u, v)
             if components[0] == 1: return t
-        return -1`,
+        return -1   # never fully connects`,
         solutionExplanation: "Union-Find with path compression and union by rank. Start with n components. Each union reduces count by 1. Return timestamp when count reaches 1.",
         testCases: [
           { description: "4-node chain connects at t=3", inputData: "t = NetworkTracker()\n_result = t.earliest_fully_connected(4, [[0,1,1],[1,2,2],[2,3,3]])", expectedOutput: "3", orderIndex: 0 },
@@ -466,8 +497,10 @@ t.earliest_pair_connected(4, edges, 0, 1)  # → 1
         pass`,
         solution: `class NetworkTracker:
     def _make_uf(self, n):
+        # parent, union-by-rank heights, live component count (boxed in a list).
         return list(range(n)), [0] * n, [n]
     def _find(self, parent, x):
+        # Path halving keeps the trees shallow.
         while parent[x] != x:
             parent[x] = parent[parent[x]]; x = parent[x]
         return x
@@ -479,6 +512,7 @@ t.earliest_pair_connected(4, edges, 0, 1)  # → 1
         if rank[px] == rank[py]: rank[px] += 1
         components[0] -= 1; return True
     def earliest_fully_connected(self, n, edges):
+        # Carried over from Stage 1.
         if n == 1: return -1
         edges = sorted(edges, key=lambda e: e[2])
         parent, rank, components = self._make_uf(n)
@@ -487,6 +521,8 @@ t.earliest_pair_connected(4, edges, 0, 1)  # → 1
             if components[0] == 1: return t
         return -1
     def earliest_pair_connected(self, n: int, edges: list[list[int]], src: int, dst: int) -> int:
+        # Same time-ordered sweep, but the stopping condition is local: watch
+        # only whether src and dst have landed in the same component.
         edges = sorted(edges, key=lambda e: e[2])
         parent, rank, components = self._make_uf(n)
         for u, v, t in edges:
@@ -543,16 +579,21 @@ d.decode("xy2[z]")     # → "xyzz"
         pass`,
         solution: `class Decoder:
     def decode(self, s: str) -> str:
+        # stack holds (text before this bracket, repeat count) pairs.
         stack = []
         current = ""
         k = 0
         for ch in s:
             if ch.isdigit():
+                # Accumulate so multi-digit counts like 12[a] parse correctly.
                 k = k * 10 + int(ch)
             elif ch == '[':
+                # Park the outer context and start a fresh inner string.
                 stack.append((current, k))
                 current = ""; k = 0
             elif ch == ']':
+                # Close the group: repeat it and splice it back onto the
+                # parked prefix. This is what makes nesting work for free.
                 prev, repeat = stack.pop()
                 current = prev + current * repeat
             else:
@@ -581,15 +622,7 @@ d.decode("3[a2[b]]")      # → "abbabbabb"
 **Hint:** The Stage 1 stack solution already handles nesting — no algorithm changes needed!`,
         baseClass: `class Decoder:
     def decode(self, s: str) -> str:
-        stack = []
-        current = ""
-        k = 0
-        for ch in s:
-            if ch.isdigit(): k = k * 10 + int(ch)
-            elif ch == '[': stack.append((current, k)); current = ""; k = 0
-            elif ch == ']': prev, repeat = stack.pop(); current = prev + current * repeat
-            else: current += ch
-        return current`,
+        pass`,
         starterCode: `class Decoder:
     def decode(self, s: str) -> str:
         # The Stage 1 stack solution handles nesting automatically.
@@ -605,10 +638,14 @@ d.decode("3[a2[b]]")      # → "abbabbabb"
         return current`,
         solution: `class Decoder:
     def decode(self, s: str) -> str:
+        # The stack is what makes nesting work: on '[' the partial result
+        # and repeat count are parked, and on ']' they are popped and
+        # combined. Stage 1's algorithm already handles arbitrary depth.
         stack = []
         current = ""
         k = 0
         for ch in s:
+            # Digits accumulate so multi-digit counts like 12[a] parse.
             if ch.isdigit(): k = k * 10 + int(ch)
             elif ch == '[': stack.append((current, k)); current = ""; k = 0
             elif ch == ']': prev, repeat = stack.pop(); current = prev + current * repeat
@@ -679,26 +716,33 @@ store.get("foo", 0)   # → ""
         pass`,
         solution: `class TimeKV:
     def __init__(self):
+        # key -> list of (timestamp, value), kept in insertion order.
         self.store = {}
 
     def set(self, key: str, value: str, timestamp: int) -> None:
         if key not in self.store:
             self.store[key] = []
+        # Timestamps are assumed non-decreasing, so appending keeps the list
+        # sorted for free and the binary search below stays valid.
         self.store[key].append((timestamp, value))
 
     def get(self, key: str, timestamp: int) -> str:
         if key not in self.store:
             return ""
         entries = self.store[key]
+        # Binary search for the LAST entry at or before timestamp, giving
+        # O(log n) lookups instead of a linear scan.
         lo, hi = 0, len(entries) - 1
         result = ""
         while lo <= hi:
             mid = (lo + hi) // 2
             if entries[mid][0] <= timestamp:
+                # Candidate found; keep going right for a closer one.
                 result = entries[mid][1]
                 lo = mid + 1
             else:
                 hi = mid - 1
+        # "" means nothing was written at or before this time.
         return result`,
         solutionExplanation: "Since timestamps are strictly increasing, the list is sorted. Binary search for the rightmost entry with ts <= query using the 'find last valid' pattern.",
         testCases: [
@@ -768,6 +812,8 @@ class TimeKV:
         if key not in self.store: self.store[key] = []
         self.store[key].append((timestamp, value))
     def get(self, key, timestamp):
+        # Carried over from Stage 1: binary search for the latest entry
+        # at or before timestamp.
         if key not in self.store: return ""
         entries = self.store[key]
         lo, hi, result = 0, len(entries)-1, ""
@@ -779,10 +825,13 @@ class TimeKV:
     def get_range(self, key: str, t1: int, t2: int) -> list[tuple[int, str]]:
         if key not in self.store: return []
         entries = self.store[key]
+        # (t1,) sorts before every (t1, value) tuple, so bisect_left lands on
+        # the first entry at exactly t1 rather than skipping past it.
         lo = bisect.bisect_left(entries, (t1,))
         result = []
         for i in range(lo, len(entries)):
             ts, val = entries[i]
+            # Sorted order means the first out-of-range entry ends the scan.
             if ts > t2: break
             result.append((ts, val))
         return result`,

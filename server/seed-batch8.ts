@@ -92,29 +92,33 @@ class JobScheduler:
 
 class JobScheduler:
     def __init__(self):
+        # deque gives O(1) popleft; a plain list would be O(n) per dequeue.
         self.queue = deque()
         self.results = {}
 
     def submit(self, job_id: str, fn) -> None:
+        # The callable is stored unevaluated — nothing runs until run_next.
         self.queue.append((job_id, fn))
 
     def run_next(self) -> str | None:
         if not self.queue:
             return None
+        # popleft gives FIFO ordering: jobs run in submission order.
         job_id, fn = self.queue.popleft()
         self.results[job_id] = fn()
         return job_id
 
     def get_result(self, job_id: str):
+        # .get so an unknown or not-yet-run job returns None instead of raising.
         return self.results.get(job_id)`,
         solutionExplanation: `A \`deque\` gives O(1) append and popleft — perfect for a FIFO queue. Results are stored in a dict keyed by job_id for O(1) retrieval.
 
 This is the foundation of task queues used in systems like Celery, BullMQ, and Sidekiq.`,
         testCases: [
-          { description: "run j1 first", inputData: "from collections import deque\ns = JobScheduler()\ns.submit(\"j1\", lambda: 42)\ns.submit(\"j2\", lambda: \"hello\")\nresult = s.run_next()", expectedOutput: "'j1'", orderIndex: 0 },
-          { description: "result j1", inputData: "from collections import deque\ns = JobScheduler()\ns.submit(\"j1\", lambda: 42)\ns.run_next()\nresult = s.get_result(\"j1\")", expectedOutput: "42", orderIndex: 1 },
-          { description: "empty queue", inputData: "from collections import deque\ns = JobScheduler()\nresult = s.run_next()", expectedOutput: "None", orderIndex: 2 },
-          { description: "fifo order", inputData: "from collections import deque\ns = JobScheduler()\ns.submit(\"a\", lambda: 1); s.submit(\"b\", lambda: 2)\ns.run_next(); s.run_next()\nresult = (s.get_result(\"a\"), s.get_result(\"b\"))", expectedOutput: "(1, 2)", orderIndex: 3 },
+          { description: "run j1 first", inputData: "from collections import deque\ns = JobScheduler()\ns.submit(\"j1\", lambda: 42)\ns.submit(\"j2\", lambda: \"hello\")\n_result = s.run_next()", expectedOutput: "'j1'", orderIndex: 0 },
+          { description: "result j1", inputData: "from collections import deque\ns = JobScheduler()\ns.submit(\"j1\", lambda: 42)\ns.run_next()\n_result = s.get_result(\"j1\")", expectedOutput: "42", orderIndex: 1 },
+          { description: "empty queue", inputData: "from collections import deque\ns = JobScheduler()\n_result = s.run_next()", expectedOutput: "None", orderIndex: 2 },
+          { description: "fifo order", inputData: "from collections import deque\ns = JobScheduler()\ns.submit(\"a\", lambda: 1); s.submit(\"b\", lambda: 2)\ns.run_next(); s.run_next()\n_result = (s.get_result(\"a\"), s.get_result(\"b\"))", expectedOutput: "(1, 2)", orderIndex: 3 },
         ],
       },
       {
@@ -225,10 +229,10 @@ class PriorityJobScheduler(JobScheduler):
 
 The tuple \`(-priority, counter, job_id, fn)\` ensures correct ordering without needing a custom comparator.`,
         testCases: [
-          { description: "high priority first", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\ns.submit(\"low\", lambda: \"low\", priority=1)\ns.submit(\"high\", lambda: \"high\", priority=10)\nresult = s.run_next()", expectedOutput: "'high'", orderIndex: 0 },
-          { description: "fifo same priority", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\ns.submit(\"a\", lambda: 1, priority=5)\ns.submit(\"b\", lambda: 2, priority=5)\nresult = s.run_next()", expectedOutput: "'a'", orderIndex: 1 },
-          { description: "all three", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\ns.submit(\"low\", lambda: 1, priority=1)\ns.submit(\"high\", lambda: 2, priority=10)\ns.submit(\"mid\", lambda: 3, priority=5)\norder = [s.run_next(), s.run_next(), s.run_next()]\nresult = order", expectedOutput: "['high', 'mid', 'low']", orderIndex: 2 },
-          { description: "empty", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\nresult = s.run_next()", expectedOutput: "None", orderIndex: 3 },
+          { description: "high priority first", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\ns.submit(\"low\", lambda: \"low\", priority=1)\ns.submit(\"high\", lambda: \"high\", priority=10)\n_result = s.run_next()", expectedOutput: "'high'", orderIndex: 0 },
+          { description: "fifo same priority", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\ns.submit(\"a\", lambda: 1, priority=5)\ns.submit(\"b\", lambda: 2, priority=5)\n_result = s.run_next()", expectedOutput: "'a'", orderIndex: 1 },
+          { description: "all three", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\ns.submit(\"low\", lambda: 1, priority=1)\ns.submit(\"high\", lambda: 2, priority=10)\ns.submit(\"mid\", lambda: 3, priority=5)\norder = [s.run_next(), s.run_next(), s.run_next()]\n_result = order", expectedOutput: "['high', 'mid', 'low']", orderIndex: 2 },
+          { description: "empty", inputData: "import heapq\nfrom collections import deque\ns = PriorityJobScheduler()\n_result = s.run_next()", expectedOutput: "None", orderIndex: 3 },
         ],
       },
     ]
@@ -304,12 +308,12 @@ v.validate("1.2.3")         # → False  (too few parts)
 
 **Time:** O(1) — IPv4 addresses have a fixed maximum length of 15 characters.`,
         testCases: [
-          { description: "valid", inputData: "v = IPv4Validator()\nresult = v.validate(\"192.168.1.1\")", expectedOutput: "True", orderIndex: 0 },
-          { description: "leading zero", inputData: "v = IPv4Validator()\nresult = v.validate(\"01.02.03.04\")", expectedOutput: "False", orderIndex: 1 },
-          { description: "out of range", inputData: "v = IPv4Validator()\nresult = v.validate(\"256.0.0.1\")", expectedOutput: "False", orderIndex: 2 },
-          { description: "too few parts", inputData: "v = IPv4Validator()\nresult = v.validate(\"1.2.3\")", expectedOutput: "False", orderIndex: 3 },
-          { description: "all zeros", inputData: "v = IPv4Validator()\nresult = v.validate(\"0.0.0.0\")", expectedOutput: "True", orderIndex: 4 },
-          { description: "max valid", inputData: "v = IPv4Validator()\nresult = v.validate(\"255.255.255.255\")", expectedOutput: "True", orderIndex: 5 },
+          { description: "valid", inputData: "v = IPv4Validator()\n_result = v.validate(\"192.168.1.1\")", expectedOutput: "True", orderIndex: 0 },
+          { description: "leading zero", inputData: "v = IPv4Validator()\n_result = v.validate(\"01.02.03.04\")", expectedOutput: "False", orderIndex: 1 },
+          { description: "out of range", inputData: "v = IPv4Validator()\n_result = v.validate(\"256.0.0.1\")", expectedOutput: "False", orderIndex: 2 },
+          { description: "too few parts", inputData: "v = IPv4Validator()\n_result = v.validate(\"1.2.3\")", expectedOutput: "False", orderIndex: 3 },
+          { description: "all zeros", inputData: "v = IPv4Validator()\n_result = v.validate(\"0.0.0.0\")", expectedOutput: "True", orderIndex: 4 },
+          { description: "max valid", inputData: "v = IPv4Validator()\n_result = v.validate(\"255.255.255.255\")", expectedOutput: "True", orderIndex: 5 },
         ],
       },
       {
@@ -364,10 +368,14 @@ v.validate_cidr("0.0.0.0/0")       # → True
         if len(parts) != 4:
             return False
         for p in parts:
+            # Empty octet, e.g. "1..2.3".
             if not p:
                 return False
+            # Reject leading zeros ("01"): they are ambiguous and some
+            # parsers read them as octal.
             if len(p) > 1 and p[0] == '0':
                 return False
+            # isdigit also rejects signs and whitespace, so int() below is safe.
             if not p.isdigit():
                 return False
             if not (0 <= int(p) <= 255):
@@ -377,21 +385,25 @@ v.validate_cidr("0.0.0.0/0")       # → True
     def validate_cidr(self, s: str) -> bool:
         if '/' not in s:
             return False
+        # rsplit on the last slash so a malformed address with several
+        # slashes fails on the prefix check rather than silently splitting wrong.
         ip, prefix = s.rsplit('/', 1)
         if not prefix.isdigit():
             return False
+        # /0 through /32 inclusive; /0 is the valid "match everything" route.
         if not (0 <= int(prefix) <= 32):
             return False
+        # Reuse the Stage 1 validator for the address half.
         return self.validate(ip)`,
         solutionExplanation: `Split on \`'/'\` using \`rsplit\` (handles edge cases like multiple slashes). Validate the prefix is a digit string in [0, 32], then reuse \`validate()\` for the IP part.
 
 CIDR notation is used in networking to specify IP ranges (e.g., \`192.168.0.0/16\` = all IPs from 192.168.0.0 to 192.168.255.255).`,
         testCases: [
-          { description: "valid cidr", inputData: "v = IPv4Validator()\nresult = v.validate_cidr(\"192.168.1.0/24\")", expectedOutput: "True", orderIndex: 0 },
-          { description: "prefix too large", inputData: "v = IPv4Validator()\nresult = v.validate_cidr(\"192.168.1.0/33\")", expectedOutput: "False", orderIndex: 1 },
-          { description: "no slash", inputData: "v = IPv4Validator()\nresult = v.validate_cidr(\"192.168.1.0\")", expectedOutput: "False", orderIndex: 2 },
-          { description: "zero prefix", inputData: "v = IPv4Validator()\nresult = v.validate_cidr(\"0.0.0.0/0\")", expectedOutput: "True", orderIndex: 3 },
-          { description: "bad ip", inputData: "v = IPv4Validator()\nresult = v.validate_cidr(\"256.0.0.0/8\")", expectedOutput: "False", orderIndex: 4 },
+          { description: "valid cidr", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"192.168.1.0/24\")", expectedOutput: "True", orderIndex: 0 },
+          { description: "prefix too large", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"192.168.1.0/33\")", expectedOutput: "False", orderIndex: 1 },
+          { description: "no slash", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"192.168.1.0\")", expectedOutput: "False", orderIndex: 2 },
+          { description: "zero prefix", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"0.0.0.0/0\")", expectedOutput: "True", orderIndex: 3 },
+          { description: "bad ip", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"256.0.0.0/8\")", expectedOutput: "False", orderIndex: 4 },
         ],
       },
     ]
@@ -479,9 +491,12 @@ doc.get_text()   # → "hello!"
         solution: `class DocumentLayer:
     def __init__(self, text: str = ""):
         self.text = text
+        # Snapshots of the whole document, newest last. Simple and correct;
+        # storing inverse operations would scale better on large documents.
         self._history = []
 
     def apply(self, op: dict) -> None:
+        # Snapshot BEFORE mutating, so undo restores the prior state.
         self._history.append(self.text)
         if op['type'] == 'insert':
             pos = op['pos']
@@ -491,6 +506,7 @@ doc.get_text()   # → "hello!"
             self.text = self.text[:pos] + self.text[pos+1:]
 
     def undo(self) -> bool:
+        # False rather than an exception when there is nothing to undo.
         if not self._history:
             return False
         self.text = self._history.pop()
@@ -502,11 +518,11 @@ doc.get_text()   # → "hello!"
 
 This is the simplest correct approach. A more memory-efficient version would store the inverse operation (e.g., "delete at pos 5" instead of the full text), but storing full snapshots is clearer and sufficient for interview purposes.`,
         testCases: [
-          { description: "insert", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\nresult = doc.get_text()", expectedOutput: "'hello!'", orderIndex: 0 },
-          { description: "delete", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"delete\", \"pos\": 0})\nresult = doc.get_text()", expectedOutput: "'ello'", orderIndex: 1 },
-          { description: "undo insert", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\ndoc.undo()\nresult = doc.get_text()", expectedOutput: "'hello'", orderIndex: 2 },
-          { description: "undo empty", inputData: "doc = DocumentLayer(\"hello\")\nresult = doc.undo()", expectedOutput: "False", orderIndex: 3 },
-          { description: "multiple ops", inputData: "doc = DocumentLayer(\"hi\")\ndoc.apply({\"type\": \"insert\", \"pos\": 2, \"char\": \"!\"})\ndoc.apply({\"type\": \"insert\", \"pos\": 3, \"char\": \"?\"})\ndoc.undo()\nresult = doc.get_text()", expectedOutput: "'hi!'", orderIndex: 4 },
+          { description: "insert", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\n_result = doc.get_text()", expectedOutput: "'hello!'", orderIndex: 0 },
+          { description: "delete", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"delete\", \"pos\": 0})\n_result = doc.get_text()", expectedOutput: "'ello'", orderIndex: 1 },
+          { description: "undo insert", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\ndoc.undo()\n_result = doc.get_text()", expectedOutput: "'hello'", orderIndex: 2 },
+          { description: "undo empty", inputData: "doc = DocumentLayer(\"hello\")\n_result = doc.undo()", expectedOutput: "False", orderIndex: 3 },
+          { description: "multiple ops", inputData: "doc = DocumentLayer(\"hi\")\ndoc.apply({\"type\": \"insert\", \"pos\": 2, \"char\": \"!\"})\ndoc.apply({\"type\": \"insert\", \"pos\": 3, \"char\": \"?\"})\ndoc.undo()\n_result = doc.get_text()", expectedOutput: "'hi!'", orderIndex: 4 },
         ],
       },
       {
@@ -582,6 +598,8 @@ doc.redo()       # → False  (nothing to redo)
 
     def apply(self, op: dict) -> None:
         self._history.append(self.text)
+        # A fresh edit invalidates the redo branch — this is what makes the
+        # history linear rather than a tree.
         self._redo_stack.clear()
         if op['type'] == 'insert':
             pos = op['pos']
@@ -593,6 +611,7 @@ doc.redo()       # → False  (nothing to redo)
     def undo(self) -> bool:
         if not self._history:
             return False
+        # Push the state being left behind so redo can return to it.
         self._redo_stack.append(self.text)
         self.text = self._history.pop()
         return True
@@ -600,6 +619,7 @@ doc.redo()       # → False  (nothing to redo)
     def redo(self) -> bool:
         if not self._redo_stack:
             return False
+        # Mirror image of undo: the two stacks hand states back and forth.
         self._history.append(self.text)
         self.text = self._redo_stack.pop()
         return True
@@ -610,10 +630,10 @@ doc.redo()       # → False  (nothing to redo)
 
 This is the **Memento design pattern** — storing snapshots of state to enable time-travel.`,
         testCases: [
-          { description: "redo after undo", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\ndoc.undo()\ndoc.redo()\nresult = doc.get_text()", expectedOutput: "'hello!'", orderIndex: 0 },
-          { description: "redo empty", inputData: "doc = DocumentLayer(\"hello\")\nresult = doc.redo()", expectedOutput: "False", orderIndex: 1 },
-          { description: "apply clears redo", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\ndoc.undo()\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"?\"})\nresult = doc.redo()", expectedOutput: "False", orderIndex: 2 },
-          { description: "undo undo redo", inputData: "doc = DocumentLayer(\"hi\")\ndoc.apply({\"type\": \"insert\", \"pos\": 2, \"char\": \"!\"})\ndoc.apply({\"type\": \"insert\", \"pos\": 3, \"char\": \"?\"})\ndoc.undo(); doc.undo(); doc.redo()\nresult = doc.get_text()", expectedOutput: "'hi!'", orderIndex: 3 },
+          { description: "redo after undo", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\ndoc.undo()\ndoc.redo()\n_result = doc.get_text()", expectedOutput: "'hello!'", orderIndex: 0 },
+          { description: "redo empty", inputData: "doc = DocumentLayer(\"hello\")\n_result = doc.redo()", expectedOutput: "False", orderIndex: 1 },
+          { description: "apply clears redo", inputData: "doc = DocumentLayer(\"hello\")\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"!\"})\ndoc.undo()\ndoc.apply({\"type\": \"insert\", \"pos\": 5, \"char\": \"?\"})\n_result = doc.redo()", expectedOutput: "False", orderIndex: 2 },
+          { description: "undo undo redo", inputData: "doc = DocumentLayer(\"hi\")\ndoc.apply({\"type\": \"insert\", \"pos\": 2, \"char\": \"!\"})\ndoc.apply({\"type\": \"insert\", \"pos\": 3, \"char\": \"?\"})\ndoc.undo(); doc.undo(); doc.redo()\n_result = doc.get_text()", expectedOutput: "'hi!'", orderIndex: 3 },
         ],
       },
     ]
@@ -682,21 +702,23 @@ class TrendingFiles:
 
 class TrendingFiles:
     def __init__(self):
+        # Counter gives O(1) increments and a ready-made ranking helper.
         self.views = Counter()
 
     def record_view(self, file_id: str) -> None:
         self.views[file_id] += 1
 
     def top_k(self, k: int) -> list[str]:
+        # most_common(k) is O(n log k) via a heap, cheaper than sorting all.
         return [fid for fid, _ in self.views.most_common(k)]`,
         solutionExplanation: `\`Counter.most_common(k)\` returns the k most frequent elements in O(n log k) time using a heap internally. This is the simplest correct implementation.
 
 For very high-throughput systems, you'd use a **Count-Min Sketch** for approximate counts with O(1) updates, or a **sorted set** (like Redis ZSET) for real-time leaderboards.`,
         testCases: [
-          { description: "top 1", inputData: "from collections import Counter\ntf = TrendingFiles()\nfor fid in [\"a\",\"b\",\"a\",\"c\",\"a\",\"b\"]: tf.record_view(fid)\nresult = tf.top_k(1)", expectedOutput: "['a']", orderIndex: 0 },
-          { description: "top 2", inputData: "from collections import Counter\ntf = TrendingFiles()\nfor fid in [\"a\",\"b\",\"a\",\"c\",\"a\",\"b\"]: tf.record_view(fid)\nresult = tf.top_k(2)", expectedOutput: "['a', 'b']", orderIndex: 1 },
-          { description: "top 3", inputData: "from collections import Counter\ntf = TrendingFiles()\nfor fid in [\"a\",\"b\",\"a\",\"c\",\"a\",\"b\"]: tf.record_view(fid)\nresult = tf.top_k(3)", expectedOutput: "['a', 'b', 'c']", orderIndex: 2 },
-          { description: "empty", inputData: "from collections import Counter\ntf = TrendingFiles()\nresult = tf.top_k(3)", expectedOutput: "[]", orderIndex: 3 },
+          { description: "top 1", inputData: "from collections import Counter\ntf = TrendingFiles()\nfor fid in [\"a\",\"b\",\"a\",\"c\",\"a\",\"b\"]: tf.record_view(fid)\n_result = tf.top_k(1)", expectedOutput: "['a']", orderIndex: 0 },
+          { description: "top 2", inputData: "from collections import Counter\ntf = TrendingFiles()\nfor fid in [\"a\",\"b\",\"a\",\"c\",\"a\",\"b\"]: tf.record_view(fid)\n_result = tf.top_k(2)", expectedOutput: "['a', 'b']", orderIndex: 1 },
+          { description: "top 3", inputData: "from collections import Counter\ntf = TrendingFiles()\nfor fid in [\"a\",\"b\",\"a\",\"c\",\"a\",\"b\"]: tf.record_view(fid)\n_result = tf.top_k(3)", expectedOutput: "['a', 'b', 'c']", orderIndex: 2 },
+          { description: "empty", inputData: "from collections import Counter\ntf = TrendingFiles()\n_result = tf.top_k(3)", expectedOutput: "[]", orderIndex: 3 },
         ],
       },
       {
@@ -763,12 +785,16 @@ class TrendingFiles:
 class SlidingWindowTrending:
     def __init__(self, window_seconds: int):
         self.window = window_seconds
+        # A running Counter cannot be used here: counts must *decrease* as
+        # events age out, so the raw events are kept and counted on demand.
         self.events = []
 
     def record_view(self, file_id: str, timestamp: int) -> None:
         self.events.append((timestamp, file_id))
 
     def top_k(self, k: int, current_time: int) -> list[str]:
+        # Strictly greater than the cutoff: an event exactly window_seconds
+        # old has already left the window.
         cutoff = current_time - self.window
         counts = Counter(fid for ts, fid in self.events if ts > cutoff)
         return [fid for fid, _ in counts.most_common(k)]`,
@@ -778,9 +804,9 @@ class SlidingWindowTrending:
 
 The sliding window pattern is fundamental to rate limiting, analytics dashboards, and real-time leaderboards.`,
         testCases: [
-          { description: "all in window", inputData: "from collections import Counter\nsw = SlidingWindowTrending(60)\nsw.record_view(\"a\", 100); sw.record_view(\"b\", 110); sw.record_view(\"a\", 120)\nresult = sorted(sw.top_k(3, 160))", expectedOutput: "['a', 'b']", orderIndex: 0 },
-          { description: "expired views", inputData: "from collections import Counter\nsw = SlidingWindowTrending(60)\nsw.record_view(\"a\", 100); sw.record_view(\"a\", 120)\nsw.record_view(\"b\", 200); sw.record_view(\"b\", 210)\nresult = sw.top_k(2, 200)", expectedOutput: "['b']", orderIndex: 1 },
-          { description: "empty window", inputData: "from collections import Counter\nsw = SlidingWindowTrending(60)\nsw.record_view(\"a\", 100)\nresult = sw.top_k(2, 200)", expectedOutput: "[]", orderIndex: 2 },
+          { description: "all in window", inputData: "from collections import Counter\nsw = SlidingWindowTrending(60)\nsw.record_view(\"a\", 100); sw.record_view(\"b\", 110); sw.record_view(\"a\", 120)\n_result = sorted(sw.top_k(3, 160))", expectedOutput: "['a', 'b']", orderIndex: 0 },
+          { description: "expired views", inputData: "from collections import Counter\nsw = SlidingWindowTrending(60)\nsw.record_view(\"a\", 100); sw.record_view(\"a\", 120)\nsw.record_view(\"b\", 200); sw.record_view(\"b\", 210)\n_result = sw.top_k(2, 200)", expectedOutput: "['b']", orderIndex: 1 },
+          { description: "empty window", inputData: "from collections import Counter\nsw = SlidingWindowTrending(60)\nsw.record_view(\"a\", 100)\n_result = sw.top_k(2, 200)", expectedOutput: "[]", orderIndex: 2 },
         ],
       },
     ]
@@ -860,10 +886,14 @@ len(cs.get_comments("rect1"))   # → 1
         pass`,
         solution: `class CommentSystem:
     def __init__(self):
+        # id -> comment record. A flat dict keyed by id makes delete O(1);
+        # grouping by element would make it a scan.
         self._comments = {}
         self._next_id = 1
 
     def add_comment(self, element_id: str, text: str, author: str) -> int:
+        # Monotonic ids are never reused, so a stale id can never resolve to
+        # a different comment later.
         cid = self._next_id
         self._next_id += 1
         self._comments[cid] = {
@@ -873,19 +903,21 @@ len(cs.get_comments("rect1"))   # → 1
         return cid
 
     def get_comments(self, element_id: str) -> list:
+        # Insertion order is preserved by dict iteration (Python 3.7+).
         return [c for c in self._comments.values()
                 if c['element_id'] == element_id]
 
     def delete_comment(self, comment_id: int) -> bool:
+        # pop with a default reports success without a separate lookup.
         return self._comments.pop(comment_id, None) is not None`,
         solutionExplanation: `A dict keyed by comment ID gives O(1) add and delete. \`get_comments\` is O(n) — for large-scale systems you'd maintain a secondary index (dict mapping element_id → list of comment IDs) for O(k) retrieval where k = comments per element.
 
 \`dict.pop(key, None)\` is idiomatic Python for "delete if exists, return None if not".`,
         testCases: [
-          { description: "add and get", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix color\", \"alice\")\nc2 = cs.add_comment(\"rect1\", \"Padding\", \"bob\")\nresult = len(cs.get_comments(\"rect1\"))", expectedOutput: "2", orderIndex: 0 },
-          { description: "delete", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix\", \"alice\")\nresult = cs.delete_comment(c1)", expectedOutput: "True", orderIndex: 1 },
-          { description: "delete nonexistent", inputData: "cs = CommentSystem()\nresult = cs.delete_comment(999)", expectedOutput: "False", orderIndex: 2 },
-          { description: "different elements", inputData: "cs = CommentSystem()\ncs.add_comment(\"rect1\", \"A\", \"alice\")\ncs.add_comment(\"circle1\", \"B\", \"bob\")\nresult = len(cs.get_comments(\"circle1\"))", expectedOutput: "1", orderIndex: 3 },
+          { description: "add and get", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix color\", \"alice\")\nc2 = cs.add_comment(\"rect1\", \"Padding\", \"bob\")\n_result = len(cs.get_comments(\"rect1\"))", expectedOutput: "2", orderIndex: 0 },
+          { description: "delete", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix\", \"alice\")\n_result = cs.delete_comment(c1)", expectedOutput: "True", orderIndex: 1 },
+          { description: "delete nonexistent", inputData: "cs = CommentSystem()\n_result = cs.delete_comment(999)", expectedOutput: "False", orderIndex: 2 },
+          { description: "different elements", inputData: "cs = CommentSystem()\ncs.add_comment(\"rect1\", \"A\", \"alice\")\ncs.add_comment(\"circle1\", \"B\", \"bob\")\n_result = len(cs.get_comments(\"circle1\"))", expectedOutput: "1", orderIndex: 3 },
         ],
       },
       {
@@ -962,11 +994,14 @@ len(cs.get_comments("rect1"))       # → 0  (resolved comments hidden)
         self._comments[cid] = {
             'id': cid, 'element_id': element_id,
             'text': text, 'author': author,
+            # Replies are nested one level deep only, and resolution is a
+            # flag rather than a delete so threads stay auditable.
             'replies': [], 'resolved': False
         }
         return cid
 
     def get_comments(self, element_id: str) -> list:
+        # Resolved threads are hidden from the default view but still stored.
         return [c for c in self._comments.values()
                 if c['element_id'] == element_id and not c['resolved']]
 
@@ -974,10 +1009,12 @@ len(cs.get_comments("rect1"))       # → 0  (resolved comments hidden)
         return self._comments.pop(comment_id, None) is not None
 
     def reply(self, parent_id: int, text: str, author: str):
+        # None distinguishes "no such parent" from a real reply count.
         if parent_id not in self._comments:
             return None
         reply = {'text': text, 'author': author}
         self._comments[parent_id]['replies'].append(reply)
+        # Returning the new count lets the caller show "3 replies" without refetching.
         return len(self._comments[parent_id]['replies'])
 
     def resolve(self, comment_id: int) -> bool:
@@ -992,11 +1029,11 @@ In a real collaborative system, you'd also need:
 - **WebSocket broadcasting** to push updates to all connected clients.
 - **Soft delete** (keep resolved comments for audit trail) vs hard delete.`,
         testCases: [
-          { description: "reply count", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix\", \"alice\")\nresult = cs.reply(c1, \"Done!\", \"bob\")", expectedOutput: "1", orderIndex: 0 },
-          { description: "reply to missing", inputData: "cs = CommentSystem()\nresult = cs.reply(999, \"Hi\", \"alice\")", expectedOutput: "None", orderIndex: 1 },
-          { description: "resolve hides", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix\", \"alice\")\ncs.resolve(c1)\nresult = len(cs.get_comments(\"rect1\"))", expectedOutput: "0", orderIndex: 2 },
-          { description: "resolve nonexistent", inputData: "cs = CommentSystem()\nresult = cs.resolve(999)", expectedOutput: "False", orderIndex: 3 },
-          { description: "unresolved still shown", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"A\", \"alice\")\nc2 = cs.add_comment(\"rect1\", \"B\", \"bob\")\ncs.resolve(c1)\nresult = len(cs.get_comments(\"rect1\"))", expectedOutput: "1", orderIndex: 4 },
+          { description: "reply count", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix\", \"alice\")\n_result = cs.reply(c1, \"Done!\", \"bob\")", expectedOutput: "1", orderIndex: 0 },
+          { description: "reply to missing", inputData: "cs = CommentSystem()\n_result = cs.reply(999, \"Hi\", \"alice\")", expectedOutput: "None", orderIndex: 1 },
+          { description: "resolve hides", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"Fix\", \"alice\")\ncs.resolve(c1)\n_result = len(cs.get_comments(\"rect1\"))", expectedOutput: "0", orderIndex: 2 },
+          { description: "resolve nonexistent", inputData: "cs = CommentSystem()\n_result = cs.resolve(999)", expectedOutput: "False", orderIndex: 3 },
+          { description: "unresolved still shown", inputData: "cs = CommentSystem()\nc1 = cs.add_comment(\"rect1\", \"A\", \"alice\")\nc2 = cs.add_comment(\"rect1\", \"B\", \"bob\")\ncs.resolve(c1)\n_result = len(cs.get_comments(\"rect1\"))", expectedOutput: "1", orderIndex: 4 },
         ],
       },
     ]
