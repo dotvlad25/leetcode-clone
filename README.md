@@ -20,8 +20,11 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:3000. On first start the app creates `data/app.db`,
-applies migrations, and seeds ~57 problems. No `.env` is required.
+Open http://localhost:3000. The repository includes a portable SQLite snapshot at
+`data/app.db`, so the bundled problems are available immediately on every
+machine. On startup the app applies any pending migrations and idempotent seed
+updates. If the file is absent, it is created and seeded automatically. No
+`.env` is required.
 
 To configure anything, copy `.env.example` to `.env` — every value in it is
 optional.
@@ -30,7 +33,7 @@ optional.
 
 | Concern | Behaviour |
 | --- | --- |
-| **Database** | SQLite file at `data/app.db` (drizzle + better-sqlite3). Created and migrated automatically on start. |
+| **Database** | Portable SQLite snapshot at `data/app.db` (drizzle + better-sqlite3). Runtime `-wal`/`-shm` sidecars stay local and are ignored by Git. |
 | **Sign-in** | None. Every request is attributed to a single auto-provisioned user (`LOCAL_USER_NAME`), so submissions and stage progress persist. |
 | **Running code** | Submitted Python runs in a `python3` child process with a 10-second timeout. |
 | **AI code review** | Optional. Set `ANTHROPIC_API_KEY` (preferred) or `OPENAI_API_KEY` in `.env`. Without a key the Analyze panel says so and everything else still works. |

@@ -101,9 +101,11 @@ jspm_packages/
 tmp/
 temp/
 
-# Database (local SQLite file + WAL sidecars)
-data/
+# Database (commit the portable app snapshot; ignore runtime sidecars/other DBs)
+data/*
+!data/app.db
 *.db
+!data/app.db
 *.db-shm
 *.db-wal
 *.sqlite
