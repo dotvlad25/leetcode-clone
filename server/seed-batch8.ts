@@ -28,12 +28,13 @@ export async function seedBatch8Problems(): Promise<void> {
 - **Stage 1:** Basic FIFO job queue — submit jobs and run them one at a time.
 - **Stage 2:** Priority queue — higher-priority jobs run first; same priority uses FIFO order.`,
       starterCode: `from collections import deque
+from typing import Optional
 
 class JobScheduler:
     def submit(self, job_id: str, fn) -> None:
         pass
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         pass
 
     def get_result(self, job_id: str):
@@ -59,17 +60,19 @@ s.run_next()          # → "j2"
 s.run_next()          # → None
 \`\`\``,
         baseClass: `from collections import deque
+from typing import Optional
 
 class JobScheduler:
     def submit(self, job_id: str, fn) -> None:
         pass
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         pass
 
     def get_result(self, job_id: str):
         pass`,
         starterCode: `from collections import deque
+from typing import Optional
 
 class JobScheduler:
     def __init__(self):
@@ -79,7 +82,7 @@ class JobScheduler:
     def submit(self, job_id: str, fn) -> None:
         self.queue.append((job_id, fn))
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         if not self.queue:
             return None
         job_id, fn = self.queue.popleft()
@@ -89,6 +92,7 @@ class JobScheduler:
     def get_result(self, job_id: str):
         return self.results.get(job_id)`,
         solution: `from collections import deque
+from typing import Optional
 
 class JobScheduler:
     def __init__(self):
@@ -100,7 +104,7 @@ class JobScheduler:
         # The callable is stored unevaluated — nothing runs until run_next.
         self.queue.append((job_id, fn))
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         if not self.queue:
             return None
         # popleft gives FIFO ordering: jobs run in submission order.
@@ -136,6 +140,7 @@ s.run_next()   # → "mid"
 s.run_next()   # → "low"
 \`\`\``,
         baseClass: `from collections import deque
+from typing import Optional
 
 class JobScheduler:
     def __init__(self):
@@ -145,7 +150,7 @@ class JobScheduler:
     def submit(self, job_id: str, fn) -> None:
         self.queue.append((job_id, fn))
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         if not self.queue:
             return None
         job_id, fn = self.queue.popleft()
@@ -156,6 +161,7 @@ class JobScheduler:
         return self.results.get(job_id)`,
         starterCode: `import heapq
 from collections import deque
+from typing import Optional
 
 class JobScheduler:
     def __init__(self):
@@ -165,7 +171,7 @@ class JobScheduler:
     def submit(self, job_id: str, fn) -> None:
         self.queue.append((job_id, fn))
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         if not self.queue:
             return None
         job_id, fn = self.queue.popleft()
@@ -185,10 +191,11 @@ class PriorityJobScheduler(JobScheduler):
         # Push to heap with (-priority, counter, job_id, fn)
         pass
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         pass`,
         solution: `import heapq
 from collections import deque
+from typing import Optional
 
 class JobScheduler:
     def __init__(self):
@@ -198,7 +205,7 @@ class JobScheduler:
     def submit(self, job_id: str, fn) -> None:
         self.queue.append((job_id, fn))
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         if not self.queue:
             return None
         job_id, fn = self.queue.popleft()
@@ -219,7 +226,7 @@ class PriorityJobScheduler(JobScheduler):
         heapq.heappush(self._heap, (-priority, self._counter, job_id, fn))
         self._counter += 1
 
-    def run_next(self) -> str | None:
+    def run_next(self) -> Optional[str]:
         if not self._heap:
             return None
         _, _, job_id, fn = heapq.heappop(self._heap)
@@ -297,13 +304,19 @@ v.validate("1.2.3")         # → False  (too few parts)
                 return False   # leading zero
             if not p.isdigit():
                 return False
-            if not (0 <= int(p) <= 255):
+            # isdigit() is also True for some non-ASCII digits (e.g. "²")
+            # that int() cannot parse, so guard the conversion.
+            try:
+                value = int(p)
+            except ValueError:
+                return False
+            if not (0 <= value <= 255):
                 return False
         return True`,
         solutionExplanation: `Split on \`'.'\` and validate each octet:
 1. Non-empty string.
 2. No leading zeros (multi-digit strings starting with \`'0'\` are invalid).
-3. All digits (\`isdigit()\` rejects signs and spaces).
+3. All digits (\`isdigit()\` rejects signs and spaces; the \`int()\` conversion is guarded because \`isdigit()\` also accepts some non-ASCII digits).
 4. Value in [0, 255].
 
 **Time:** O(1) — IPv4 addresses have a fixed maximum length of 15 characters.`,
@@ -314,6 +327,7 @@ v.validate("1.2.3")         # → False  (too few parts)
           { description: "too few parts", inputData: "v = IPv4Validator()\n_result = v.validate(\"1.2.3\")", expectedOutput: "False", orderIndex: 3 },
           { description: "all zeros", inputData: "v = IPv4Validator()\n_result = v.validate(\"0.0.0.0\")", expectedOutput: "True", orderIndex: 4 },
           { description: "max valid", inputData: "v = IPv4Validator()\n_result = v.validate(\"255.255.255.255\")", expectedOutput: "True", orderIndex: 5 },
+          { description: "unicode digits rejected", inputData: "v = IPv4Validator()\n_result = v.validate(\"².0.0.1\")", expectedOutput: "False", orderIndex: 6 },
         ],
       },
       {
@@ -340,7 +354,13 @@ v.validate_cidr("0.0.0.0/0")       # → True
                 return False
             if not p.isdigit():
                 return False
-            if not (0 <= int(p) <= 255):
+            # isdigit() is also True for some non-ASCII digits (e.g. "²")
+            # that int() cannot parse, so guard the conversion.
+            try:
+                value = int(p)
+            except ValueError:
+                return False
+            if not (0 <= value <= 255):
                 return False
         return True`,
         starterCode: `class IPv4Validator:
@@ -355,7 +375,13 @@ v.validate_cidr("0.0.0.0/0")       # → True
                 return False
             if not p.isdigit():
                 return False
-            if not (0 <= int(p) <= 255):
+            # isdigit() is also True for some non-ASCII digits (e.g. "²")
+            # that int() cannot parse, so guard the conversion.
+            try:
+                value = int(p)
+            except ValueError:
+                return False
+            if not (0 <= value <= 255):
                 return False
         return True
 
@@ -375,10 +401,16 @@ v.validate_cidr("0.0.0.0/0")       # → True
             # parsers read them as octal.
             if len(p) > 1 and p[0] == '0':
                 return False
-            # isdigit also rejects signs and whitespace, so int() below is safe.
+            # isdigit() rejects signs and whitespace, but is also True for
+            # some non-ASCII digits (e.g. "²") that int() cannot parse,
+            # so the conversion itself is guarded.
             if not p.isdigit():
                 return False
-            if not (0 <= int(p) <= 255):
+            try:
+                value = int(p)
+            except ValueError:
+                return False
+            if not (0 <= value <= 255):
                 return False
         return True
 
@@ -390,8 +422,14 @@ v.validate_cidr("0.0.0.0/0")       # → True
         ip, prefix = s.rsplit('/', 1)
         if not prefix.isdigit():
             return False
+        # Same non-ASCII guard as validate(): isdigit() can pass for
+        # digits int() cannot parse.
+        try:
+            prefix_num = int(prefix)
+        except ValueError:
+            return False
         # /0 through /32 inclusive; /0 is the valid "match everything" route.
-        if not (0 <= int(prefix) <= 32):
+        if not (0 <= prefix_num <= 32):
             return False
         # Reuse the Stage 1 validator for the address half.
         return self.validate(ip)`,
@@ -404,6 +442,7 @@ CIDR notation is used in networking to specify IP ranges (e.g., \`192.168.0.0/16
           { description: "no slash", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"192.168.1.0\")", expectedOutput: "False", orderIndex: 2 },
           { description: "zero prefix", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"0.0.0.0/0\")", expectedOutput: "True", orderIndex: 3 },
           { description: "bad ip", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"256.0.0.0/8\")", expectedOutput: "False", orderIndex: 4 },
+          { description: "unicode prefix rejected", inputData: "v = IPv4Validator()\n_result = v.validate_cidr(\"1.2.3.4/²\")", expectedOutput: "False", orderIndex: 5 },
         ],
       },
     ]
@@ -768,7 +807,7 @@ class SlidingWindowTrending:
         self.events.append((timestamp, file_id))
 
     def top_k(self, k: int, current_time: int) -> list[str]:
-        # Count only events where timestamp > current_time - window
+        # Count only events where timestamp >= current_time - window
         pass`,
         solution: `from collections import Counter
 
@@ -793,12 +832,12 @@ class SlidingWindowTrending:
         self.events.append((timestamp, file_id))
 
     def top_k(self, k: int, current_time: int) -> list[str]:
-        # Strictly greater than the cutoff: an event exactly window_seconds
-        # old has already left the window.
+        # At or after the cutoff: an event exactly window_seconds old
+        # is still inside the window.
         cutoff = current_time - self.window
-        counts = Counter(fid for ts, fid in self.events if ts > cutoff)
+        counts = Counter(fid for ts, fid in self.events if ts >= cutoff)
         return [fid for fid, _ in counts.most_common(k)]`,
-        solutionExplanation: `We store all events as \`(timestamp, file_id)\` pairs. On \`top_k\`, we filter to events strictly after \`current_time - window\` and count with a Counter.
+        solutionExplanation: `We store all events as \`(timestamp, file_id)\` pairs. On \`top_k\`, we filter to events at or after \`current_time - window\` and count with a Counter.
 
 **Time:** O(n) per query where n = total events. For production, you'd use a sorted structure (e.g., a sorted list + bisect, or a Redis sorted set) to evict old events in O(log n).
 

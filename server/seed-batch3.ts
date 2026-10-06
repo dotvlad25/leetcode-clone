@@ -3,7 +3,7 @@ import { seedStagedProblemIfNotExists } from "./db";
 // ─────────────────────────────────────────────────────────────────────────────
 // Batch 3: 3 Figma + 5 Anthropic staged problems
 // Figma:     18001 – Graph Reachability For File Permissions (3 stages)
-//            19001 – Document Editor with Undo/Redo and Batching (4 stages)
+//            19001 – Document Editor with Undo/Redo and Batching (3 stages)
 //            20001 – File/Folder/Team Permissions Fewest Grants (already exists as 16001)
 // Anthropic: 21001 – File Deduplication (3 stages)
 //            22001 – In-Memory Banking Service (4 stages)
@@ -410,7 +410,7 @@ This is the #1 most-reported Figma phone-screen question. The document starts as
 - \`delete(start, end)\` – remove characters from start (inclusive) to end (exclusive)
 - \`replace(start, end, text)\` – replace characters from start to end with text
 
-The problem is implemented in 4 progressive stages.`,
+The problem is implemented in 3 progressive stages.`,
       starterCode: `class DocumentEditor:
     def __init__(self):
         self.text = ""
